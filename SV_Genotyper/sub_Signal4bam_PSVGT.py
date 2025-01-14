@@ -2,9 +2,7 @@ import pysam
 import re
 
 def process_chromosome(chromosome,chromosome_list, bamfile_path, minLen, maxLen, min_maq, SVsignal_out_path, cov_out_path,dtype,msv):
-    # Open the samfile inside the worker process
     samfile = pysam.AlignmentFile(bamfile_path, 'rb')
-    # Open output files inside the worker process
     with open(f"{SVsignal_out_path}_{chromosome}.record.txt", 'w') as indel_out, open(f"{cov_out_path}_{chromosome}", 'w') as cov_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.suppAlign", 'w') as supp_sv_out:
         # Fetch all reads from the chromosome
         lines = samfile.fetch(chromosome)
@@ -59,12 +57,12 @@ def svInDel4asm(line, minLen, min_maq):
                 ref += length
             elif code == "I":  # Insertion
                 if length >= minLen:
-                    ins_seq = query_seq[query + 1: query + length - 1]
+                    ins_seq = query_seq[query : query + length ]
                     results.append(f"{target_chr}\t{query_chr}\t{ref}\t{ref + 1}\t{length}\t{maq}\t{target_chr}:{ref}-{ref+1}_INS={length}\tINS\t{ins_seq}\n")
                 query += length
-            elif code in {"N", "S", "H"}:
-                ref += length if code == "N" else 0
-                query += length
+            #elif code in {"N", "S", "H"}:
+            #    ref += length if code == "N" else 0
+            #    query += length
         return results, f'{query_chr}\t{flag}\t{target_chr}\t{target_start}\t{target_end}\t{maq}\t{cigar}\n'  # Return results and coverage line
 
 
@@ -251,6 +249,7 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
         query_chr = line.query_name
         query_seq = line.query_sequence
         target_chr = line.reference_name
+        target_start = line.reference_start
         target_end   = line.reference_end
         maq = line.mapping_quality
         flag = line.flag
@@ -271,12 +270,14 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
                 ref += length
             elif code == "I":  # Insertion  base in strandness and position to get Insertions
                 if length >= minLen:
-                    ins_seq = query_seq[query + 1: query + length -1]
+                    ins_seq = query_seq[query : query + length ]
+                    #if len(ins_seq) < 50:
+                    #    print("!!!!!!!!! ins_seq extract error !!!!!!!!!")
                     svInDels.append(f"{target_chr}\t{query_chr}\t{ref}\t{ref + 1}\t{length}\t{maq}\t{target_chr}:{ref}-{ref+1}_INS={length}\tINS\t{ins_seq}\n")
                 query += length
-            elif code in {"N", "S", "H"}:
-                ref += length if code == "N" else 0
-                query += length
+            #elif code in {"N", "S", "H"}:
+            #    ref += length if code == "N" else 0
+            #    query += length
         covinfo = f'{query_chr}\t{flag}\t{target_chr}\t{target_start}\t{target_end}\t{maq}\t{cigar}\n'
         if msv == "yes":
             if line.has_tag("SA"):

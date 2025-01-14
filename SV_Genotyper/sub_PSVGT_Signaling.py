@@ -220,9 +220,9 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
                     ins_seq = query_seq[query + 1: query + length -1]
                     svInDels.append(f"{target_chr}\t{query_chr}\t{ref}\t{ref + 1}\t{length}\t{maq}\t{target_chr}:{ref}-{ref+1}_INS={length}\tINS\t{ins_seq}\n")
                 query += length
-            elif code in {"N", "S", "H"}:
-                ref += length if code == "N" else 0
-                query += length
+            #elif code in {"N", "S", "H"}:
+            #    ref += length if code == "N" else 0
+            #    query += length
         covinfo = f'{query_chr}\t{flag}\t{target_chr}\t{target_start}\t{target_end}\t{maq}\t{cigar}\n'
         if msv == "yes":
             if line.has_tag("SA"):
@@ -283,9 +283,9 @@ def svInDel4asm(line, minLen, min_maq):
                     ins_seq = query_seq[query + 1: query + length -1]
                     results.append(f"{target_chr}\t{query_chr}\t{ref}\t{ref + 1}\t{length}\t{maq}\t{target_chr}:{ref}-{ref+1}_INS={length}\tINS\t{ins_seq}\n")
                 query += length
-            elif code in {"N", "S", "H"}:
-                ref += length if code == "N" else 0
-                query += length
+            #elif code in {"N", "S", "H"}:
+            #    ref += length if code == "N" else 0
+            #    query += length
         return results, f'{query_chr}\t{flag}\t{target_chr}\t{target_start}\t{target_end}\t{maq}\t{cigar}\n'  # Return results and coverage line
 
 if __name__ == "__main__":

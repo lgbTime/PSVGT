@@ -11,7 +11,9 @@ def svs_clu(df, opened_bam, csv, max_diff, svtype, chrom):
     df['Target_start'] = df['Target_start'].astype(int)
     df['Target_end'] = df['Target_end'].astype(int)
     df['SVlen'] = df['SVlen'].astype(int)
+    df['maq'] = df['maq'].astype(int)
     df = df.sort_values(by=['#Target_name', 'Target_start', 'SVlen']).reset_index(drop=True)
+    print(df.head())
     grouped = df.groupby('SVID')
     clus = []
     for cs_id, cs in grouped:
@@ -76,6 +78,7 @@ def tra_clu(df, opened_bam, csv, chrom, max_diff=1000):
     df["#Target_name2"] = df['SVID'].str.split(":", expand=True)[0]
     df["Target_start1"] = df["Target_start1"].astype(int)
     df["Target_start2"] = df["Target_start2"].astype(int)
+    df['maq'] = df['maq'].astype(int)
     df.sort_values(by=['SVID'], inplace=True)
     grouped = df.groupby('SVID')
     clus = []
@@ -144,7 +147,6 @@ def load_and_process_sv_data(args):
     svindel = pd.read_csv(args.raw_signal, sep="\t", header=None, dtype=str)
     print(svindel.head())
     svindel.columns = ["#Target_name", "Query_name", "Target_start", "Target_end", "SVlen", "maq", "SVID", "SVType", "seq"]
-    svindel['#Target_name'] = svindel["#Target_name"].astype(str)
     svindel['SVlen'] = svindel['SVlen'].astype(int)
     svindel = svindel[svindel["SVlen"] <= args.max]
     sv_data = {sv_type: svindel[svindel['SVType'] == sv_type] for sv_type in ["DEL", "INS", "INV", "DUP", "TRA"]}
