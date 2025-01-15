@@ -23,11 +23,10 @@ def main():
     if args.out[-4:] == ".bam":
         args.out = args.out.replace('.bam', '')
     SVsignal_out_path = f"{args.out}"
-    cov_out_path = f"{args.out}.cov"
     # Use multiprocessing to parallelize the chromosome processing
     with Pool() as pool:
         pool.starmap(sub_Signal4bam_PSVGT.process_chromosome, 
-                     [(chromosome,chromosome_list, args.bam, args.min,args.max, args.maq, SVsignal_out_path, cov_out_path,args.dtype,args.msv) 
+                     [(chromosome,chromosome_list, args.bam, args.min,args.max, args.maq, SVsignal_out_path,args.dtype,args.msv) 
                       for chromosome in chromosome_list])
     exe_end = time()
     print(f"{'*' * 40} done SV searching {'*' * 40}\ncost time: {exe_end - exe_start}")

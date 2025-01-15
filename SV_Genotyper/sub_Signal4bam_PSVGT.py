@@ -1,9 +1,9 @@
 import pysam
 import re
 
-def process_chromosome(chromosome,chromosome_list, bamfile_path, minLen, maxLen, min_maq, SVsignal_out_path, cov_out_path,dtype,msv):
+def process_chromosome(chromosome,chromosome_list, bamfile_path, minLen, maxLen, min_maq, SVsignal_out_path,dtype,msv):
     samfile = pysam.AlignmentFile(bamfile_path, 'rb')
-    with open(f"{SVsignal_out_path}_{chromosome}.record.txt", 'w') as indel_out, open(f"{cov_out_path}_{chromosome}", 'w') as cov_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.suppAlign", 'w') as supp_sv_out:
+    with open(f"{SVsignal_out_path}_{chromosome}.record.txt", 'w') as indel_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.cov", 'w') as cov_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.suppAlign", 'w') as supp_sv_out:
         # Fetch all reads from the chromosome
         lines = samfile.fetch(chromosome)
         for line in lines:

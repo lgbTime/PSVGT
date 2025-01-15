@@ -193,7 +193,7 @@ if __name__ == "__main__":
                 signal_cmd = f'python {PSVGT_folder}/SV_Genotyper/0.PSVGT_raw2Signal.py -i {contig} -dtype {dtype} -r {args.refGenome} -m {args.min}  -maq {maq} -o {args.outdir} -minimapCPU {args.minimapCPU} -msv {args.msv_mode}'
                 clu2fil_cmds = ''
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -b {args.outdir}/0_tmp_{basename(contig)}.bam -s 1000 -M {args.max} -csv 0.2'
+                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov -s 1000 -M {args.max} -csv 0.2'
                     clu2fil_cmds += clu2fil_cmd
                 final_cmd = signal_cmd + clu2fil_cmds + f"&& python {PSVGT_folder}/SV_Genotyper/1.SSV_signal_cluster.py  -preffix {args.outdir}/0_tmp_{basename(contig)} -s 50 -fai {args.refGenome}.fai"
                 Pop_SV_Analysor_cmds.append(final_cmd)
@@ -206,7 +206,7 @@ if __name__ == "__main__":
                 signal_cmd = f'python {PSVGT_folder}/SV_Genotyper/0.Signal4bam_PSVGT.py -b {bam} -o {args.outdir}/{basename(bam)} -m {args.min} -maq {args.maq} -dtype {dtype} -msv {args.msv_mode} -fai {args.refGenome}.fai'
                 clu2fil_cmds =''
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -b {bam} -s 1000 -M {args.max} -csv 0.2'
+                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} --b {bam} -s 1000 -M {args.max} -csv 0.2 --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov'
                     clu2fil_cmds += clu2fil_cmd
                 final_cmd = signal_cmd + clu2fil_cmds + f"&& python {PSVGT_folder}/SV_Genotyper/1.SSV_signal_cluster.py  -preffix {args.outdir}/{basename(bam).replace('.bam', '')} -s 50 -fai {args.refGenome}.fai"
                 Pop_SV_Analysor_cmds.append(final_cmd)
@@ -231,7 +231,7 @@ if __name__ == "__main__":
         add_commands4fq(file_capture(args.crdir, ".fasta"), "cr")
         add_commands4fq(file_capture(args.crdir, ".fa"), "cr")
         add_commands4bam(file_capture(args.crdir, ".bam"), "cr")
-        already_maps += file_capture(args.hifidir, ".bam")
+        already_maps += file_capture(args.crdir, ".bam")
 
     # Execute commands using ThreadPool
     with ThreadPoolExecutor(max_workers=args.max_workers) as executor:

@@ -2,12 +2,23 @@ import argparse
 from time import time
 import pandas as pd
 import pysam
-import multiprocessing
-def local_cov(opened_bam, reference, start, end):
-    num_maps = opened_bam.count(reference, start, end)
+import multiprocessing          
+def local_cov(covinfo, reference, start, end):
+    """
+    For Contig samples may be cov file of txt will be better speed up, 
+    since it did not cause time on open a bam that has long seq mapping
+    """
+    if isinstance(covinfo, pd.DataFrame):
+        cov =  covinfo[(covinfo['target_chr']==reference) 
+                    & (covinfo['target_start']<= start) 
+                    & (covinfo['target_end']>= end)
+                    ]
+        num_maps = cov.shape[0]
+    else:
+        num_maps = covinfo.count(reference, start, end)
     return num_maps
 
-def svs_clu(df, opened_bam, csv, max_diff, svtype, chrom):
+def svs_clu(df, covinfo, csv, max_diff, svtype, chrom):
     df['Target_start'] = df['Target_start'].astype(int)
     df['Target_end'] = df['Target_end'].astype(int)
     df['SVlen'] = df['SVlen'].astype(int)
@@ -50,8 +61,8 @@ def svs_clu(df, opened_bam, csv, max_diff, svtype, chrom):
         Target_name = chrom
         Target_start = cs.loc[cs['clu_size'].idxmax()].Target_start
         Target_end = cs.loc[cs['clu_size'].idxmax()].Target_end
-        start_local_map = local_cov(opened_bam, Target_name, max(0, Target_start - 150), max(Target_start - 50, 0))
-        end_local_map = local_cov(opened_bam, Target_name, Target_end + 50, Target_end + 150)
+        start_local_map = local_cov(covinfo, Target_name, max(0, Target_start - 150), max(Target_start - 50, 0))
+        end_local_map = local_cov(covinfo, Target_name, Target_end + 50, Target_end + 150)
         if cluster_size >= max(start_local_map, end_local_map) * csv:
             SVlen = cs.loc[cs['clu_size'].idxmax()].SVlen
             SVID = cs.loc[cs['clu_size'].idxmax()].SVID
@@ -73,7 +84,7 @@ def svs_clu(df, opened_bam, csv, max_diff, svtype, chrom):
     return shift2clu
 
 
-def tra_clu(df, opened_bam, csv, chrom, max_diff=1000):
+def tra_clu(df, covinfo, csv, chrom, max_diff=1000):
     df.columns = ["#Target_name1", "Query_name", "Target_start1", "Target_start2", "SVlen", "maq", "SVID", 'SVType', 'seq']
     df["#Target_name2"] = df['SVID'].str.split(":", expand=True)[0]
     df["Target_start1"] = df["Target_start1"].astype(int)
@@ -114,8 +125,8 @@ def tra_clu(df, opened_bam, csv, chrom, max_diff=1000):
         Target_start1, Target_start2 = bp1_c.loc[bp1_c['clu_size'].idxmax()].Target_start1, bp1_c.loc[bp1_c['clu_size'].idxmax()].Target_start2
         meanq, SVID = bp1_c['maq'].mean(), bp1_c.loc[bp1_c['clu_size'].idxmax()].SVID
         bp1_size = bp1_c['clu_size'].sum()
-        start1_local_map = local_cov(opened_bam, Target_name1, max(Target_start1 - 150, 0), max(Target_start1 - 50, 0))
-        start2_local_map = local_cov(opened_bam, Target_name2, Target_start2 + 50, Target_start2 + 150)
+        start1_local_map = local_cov(covinfo, Target_name1, max(Target_start1 - 150, 0), max(Target_start1 - 50, 0))
+        start2_local_map = local_cov(covinfo, Target_name2, Target_start2 + 50, Target_start2 + 150)
         if bp1_size >= max(start1_local_map, start2_local_map) * csv:
             bp1_clus.append({
                 '#Target_name': Target_name1,
@@ -137,16 +148,19 @@ def read_file(file_name):
         print(f"The file {file_name} does not exist or is empty.")
         return []
     try:
-        return pd.read_csv(file_name, sep="\t", header=0, dtype=str)
+        return pd.read_csv(file_name, sep="\t", header=None, dtype=str,index_col=None)
     except pd.errors.EmptyDataError:
         print(f"The file {file_name} is empty or malformed.")
         return []
 
 
 def load_and_process_sv_data(args):
-    svindel = pd.read_csv(args.raw_signal, sep="\t", header=None, dtype=str)
+    svindel = read_file(args.raw_signal)
+    if len(svindel) == 0:
+        return [],[]
     print(svindel.head())
     svindel.columns = ["#Target_name", "Query_name", "Target_start", "Target_end", "SVlen", "maq", "SVID", "SVType", "seq"]
+    chroms = svindel['#Target_name'].unique()
     svindel['SVlen'] = svindel['SVlen'].astype(int)
     svindel = svindel[svindel["SVlen"] <= args.max]
     sv_data = {sv_type: svindel[svindel['SVType'] == sv_type] for sv_type in ["DEL", "INS", "INV", "DUP", "TRA"]}
@@ -155,22 +169,27 @@ def load_and_process_sv_data(args):
         msv.columns = ["#Target_name", "Query_name", "Target_start", "Target_end", "SVlen", "maq", "SVID", "SVType", "seq"]
         for svtype in sv_data:
             sv_data[svtype] = pd.concat([sv_data[svtype], msv[msv['SVType'] == svtype]], axis=0)
-    return sv_data
+    return sv_data,chroms
 
 
-def process_svtype(args,sv_data, svtype):
-    chroms = sv_data['DEL']['#Target_name'].unique()
+def process_svtype(args,sv_data, chroms, svtype):
+    """
+    cov info parse by covfile or bam file
+    """
     tra_clus, del_clus, ins_clus, inv_clus, dup_clus = [], [], [], [], []
-    opened_bam = pysam.AlignmentFile(args.bam, "rb")
+    if args.dtype in ['cr']:
+        covinfo = pd.read_csv(args.covfile, sep="\t",index_col=None,header=None)
+        covinfo.columns = ['query_chr', 'flag', 'target_chr', 'target_start', 'target_end', 'maq', 'cigar']
+        covinfo['target_chr'] = covinfo['target_chr'].astype(str)
+    else:
+        covinfo = pysam.AlignmentFile(args.bam, "rb")
     for chrom in chroms:
         chrom_data = {svtype: sv_data[svtype][sv_data[svtype]['#Target_name'] == chrom] for svtype in sv_data}
-
         def process_sv_type(svtype, shift_multiplier, default_max_diff):
             if svtype == "TRA":
-                return tra_clu(chrom_data[svtype], opened_bam, args.csv, chrom, shift_multiplier * args.shift) if not chrom_data[svtype].empty else []
+                return tra_clu(chrom_data[svtype], covinfo, args.csv, chrom, shift_multiplier * args.shift) if not chrom_data[svtype].empty else []
             else:
-                return svs_clu(chrom_data[svtype], opened_bam, args.csv, shift_multiplier * args.shift, svtype, chrom) if not chrom_data[svtype].empty else []
-
+                return svs_clu(chrom_data[svtype], covinfo, args.csv, shift_multiplier * args.shift, svtype, chrom) if not chrom_data[svtype].empty else []
         if svtype == "DEL":
             del_clus = process_sv_type("DEL", 1, 200)
         elif svtype == "INS":
@@ -181,43 +200,51 @@ def process_svtype(args,sv_data, svtype):
             dup_clus = process_sv_type("DUP", 2, args.shift)
         elif svtype == "TRA":
             tra_clus = process_sv_type("TRA", 1, args.shift)
-    opened_bam.close()
     return tra_clus, del_clus, ins_clus, inv_clus, dup_clus
-
 
 def candidateSV(args):
-    sv_data = load_and_process_sv_data(args)
-    sv_types = ["DEL", "INS", "INV", "DUP", "TRA"]
-    with multiprocessing.Pool() as pool:
-        results = pool.starmap(process_svtype, [(args, sv_data, svtype) for svtype in sv_types])
-    tra_clus, del_clus, ins_clus, inv_clus, dup_clus = [], [], [], [], []
-    for result in results:
-        tra_clus += result[0]
-        del_clus += result[1]
-        ins_clus += result[2]
-        inv_clus += result[3]
-        dup_clus += result[4]
-    return tra_clus, del_clus, ins_clus, inv_clus, dup_clus
+    sv_data,chroms = load_and_process_sv_data(args)
+    if len(sv_data) !=0:
+        sv_types = ["DEL", "INS", "INV", "DUP", "TRA"]
+        with multiprocessing.Pool() as pool:
+            results = pool.starmap(process_svtype, [(args, sv_data, chroms, svtype) for svtype in sv_types])
+        tra_clus, del_clus, ins_clus, inv_clus, dup_clus = [], [], [], [], []
+        for result in results:
+            tra_clus += result[0]
+            del_clus += result[1]
+            ins_clus += result[2]
+            inv_clus += result[3]
+            dup_clus += result[4]
+        return tra_clus, del_clus, ins_clus, inv_clus, dup_clus
+    else:
+        return [], [], [], [], []
 
 
 if __name__ == "__main__":
     import os
     parser = argparse.ArgumentParser("signal filtering through support reads ratio", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    IN = parser.add_argument_group("Input file ")
+    IN = parser.add_argument_group("Input File ")
     IN.add_argument("-f", dest="raw_signal", required=True, help="the raw sv signal record file from 0 step signalling")
-    IN.add_argument("-s", dest="shift", default=2000, type=int, help="the distance shift of breakpoint to cluster the TRA/INV/DUP signal")
-    IN.add_argument("-b", dest="bam", type=str, help="the bam file of Individual")
+    IN.add_argument("-s", dest="shift", default=1000, type=int, help="the distance shift of breakpoint to cluster the TRA/INV/DUP signal")
     IN.add_argument("-M", dest="max", type=int, default=6868686, help="the max SV length")
-    IN.add_argument("-csv", dest="csv", type=float, default=0.15, help="the paramter to filter the sv signal / local_total < 0.15")
+    IN.add_argument("-dtype", dest="dtype", type=str, help="the sequencing type of samples")
+    IN.add_argument("-csv", dest="csv", type=float, default=0.2, help="the paramter to filter the sv signal / local_total < 0.2")
+    IN.add_argument("--cov", dest="covfile", type=str, help= "Coverage File")
+    IN.add_argument("--b", dest="bam", type=str, help="the bam file of Individual")
     args = parser.parse_args()
     start_t = time()
     tra_clus, del_clus, ins_clus, inv_clus, dup_clus = candidateSV(args)
     #import cProfile
     #cProfile.run('candidateSV(args)')
-    pd.DataFrame(tra_clus).to_csv(f"{args.raw_signal}_TRA.signal", header=True, sep="\t", index=None)
-    pd.DataFrame(dup_clus).to_csv(f"{args.raw_signal}_DUP.signal", header=True, sep="\t", index=None)
-    pd.DataFrame(inv_clus).to_csv(f"{args.raw_signal}_INV.signal", header=True, sep="\t", index=None)
-    pd.DataFrame(ins_clus).to_csv(f"{args.raw_signal}_INS.signal", header=True, sep="\t", index=None)
-    pd.DataFrame(del_clus).to_csv(f"{args.raw_signal}_DEL.signal", header=True, sep="\t", index=None)
+    if len(tra_clus) >0:
+        pd.DataFrame(tra_clus).to_csv(f"{args.raw_signal}_TRA.signal", header=True, sep="\t", index=None)
+    if len(dup_clus) >0:
+        pd.DataFrame(dup_clus).to_csv(f"{args.raw_signal}_DUP.signal", header=True, sep="\t", index=None)
+    if len(inv_clus) >0:
+        pd.DataFrame(inv_clus).to_csv(f"{args.raw_signal}_INV.signal", header=True, sep="\t", index=None)
+    if len(ins_clus) >0:
+        pd.DataFrame(ins_clus).to_csv(f"{args.raw_signal}_INS.signal", header=True, sep="\t", index=None)
+    if len(del_clus) >0:
+        pd.DataFrame(del_clus).to_csv(f"{args.raw_signal}_DEL.signal", header=True, sep="\t", index=None)
     end_t = time()
     print(f"******************** Time in cluster Cost {end_t - start_t}s *****************************")
