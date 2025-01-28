@@ -1,10 +1,4 @@
-![PSVGT](https://github.com/lgbTime/PSVGT/logo.png)  
-    ____                 ______    ______________
-   / __ \____  ____     / ___/ |  / / ____/_  __/
-  / /_/ / __ \/ __ \    \__ \| | / / / __  / /   
- / ____/ /_/ / /_/ /   ___/ /| |/ / /_/ / / /    
-/_/    \____/ .___/   /____/ |___/\____/ /_/     
-           /_/                              
+![PSVGT](https://github.com/lgbTime/PSVGT/logo.png)                         
 ## PSVGT is a versatile program for SV detection and genotyping at population scale, supporting all sequence length (>150+ pbs) and depth free, providing CAPS & InDel development Modules and SV annotation function
 The short reads samples will be de novo into contigs, while assemble samples and long reads sequencing data could be directory used in the SV detection and Genotyping.
 ## 💻 Installation
