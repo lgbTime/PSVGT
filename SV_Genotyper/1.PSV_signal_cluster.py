@@ -15,7 +15,7 @@ def most_common(series):
     """
     return series.mode().iloc[0] if not series.mode().empty else series.iloc[0]
 
-def svs_clu(chrsvdf, svtype, pop_size,max_diff=100):
+def svs_clu(chrsvdf, svtype, chrom, max_diff=50):
     df = chrsvdf.copy()
     df['Target_start'] = df['Target_start'].astype(int)
     df['Target_end'] = df['Target_end'].astype(int)
@@ -29,7 +29,7 @@ def svs_clu(chrsvdf, svtype, pop_size,max_diff=100):
             old_len = df.loc[i-1, 'SVlen']
             now_len = df.loc[i, 'SVlen']
             relate_size = old_len / now_len
-            if abs(df.loc[i, 'Target_start'] - df.loc[i-1, 'Target_start']) <= max_diff and abs(df.loc[i, 'Target_end'] - df.loc[i-1, 'Target_end']) <= max_diff and (0.7 < relate_size < 1.3):
+            if abs(df.loc[i, 'Target_start'] - df.loc[i-1, 'Target_start']) <= max_diff and abs(df.loc[i, 'Target_end'] - df.loc[i-1, 'Target_end']) <= max_diff and (0.65 < relate_size < 1.35):
                 df.loc[i, 'cluster'] = df.loc[i-1, 'cluster']
             else:
                 cluster_id += 1
@@ -37,7 +37,7 @@ def svs_clu(chrsvdf, svtype, pop_size,max_diff=100):
         else:
             cluster_id += 1
             df.loc[i, 'cluster'] = cluster_id
-    print(f'The {svtype} data shape: {df.shape}\nThe {svtype} data shape after clustering by shift:{int(max_diff)} is {len(df["cluster"].unique())}') 
+    print(f'The {chrom} {svtype} data {df.shape} after clustering by shift:{int(max_diff)} is {len(df["cluster"].unique())}') 
     clu = []
     for c in df['cluster'].unique():
         cs = df[df['cluster'] == c]
@@ -61,7 +61,7 @@ def svs_clu(chrsvdf, svtype, pop_size,max_diff=100):
                 })
     return clu
 
-def tra_clu(tradf, pop_size, max_diff=1000):
+def tra_clu(tradf, chrom, max_diff=1000):
     df = tradf.copy()
     df.columns = ["#Target_name1", "Target_start1","Target_start2", "SVlen","SVID",'SVType','seq','cluster_size', 'Query_name', 'maq']
     df["#Target_name2"] = df['SVID'].str.split(":", expand=True)[0]
@@ -83,7 +83,7 @@ def tra_clu(tradf, pop_size, max_diff=1000):
             cluster_id += 1
             df.loc[i, 'cluster'] = cluster_id
 
-    print(f'The TRA signal shape: {df.shape}\nThe TRA signal data shape after clustering by shift:{int(max_diff)} is {len(df["cluster"].unique())}') 
+    print(f'The {chrom} TRA signal data {tradf.shape} after clustering by shift:{int(max_diff)} is {len(df["cluster"].unique())}') 
     clu = []
     for c in df['cluster'].unique():
         cs = df[df['cluster'] == c]
@@ -132,8 +132,8 @@ def read_file(file_name):
 def candidateSV(args):
     file_lists = file_capture(args.sv_dir, ".signal")
     file_lists.sort()
-    pop_size = len(file_capture(args.sv_dir, ".record.txt"))
-    print(f'************************** The population size is {pop_size} ***************************')
+    chrom_total = len(file_capture(args.sv_dir, ".record.txt"))
+    print(f'************************** chromsomes numer is {chrom_total} ***************************')
     sv = pd.read_csv(file_lists[0],header=0,index_col=None,sep="\t")
     for file_name in file_lists[1:]:
         svi = read_file(file_name)
@@ -151,27 +151,27 @@ def candidateSV(args):
         if  delchr.empty:
             dels = []
         else:
-            dels = svs_clu(delchr,'DEL', pop_size, args.shift)
+            dels = svs_clu(delchr,'DEL', chrom, args.shift)
 
         if inschr.empty:
             ins = []
         else:
-            ins = svs_clu(inschr,'INS', pop_size, args.shift)
+            ins = svs_clu(inschr,'INS', chrom, args.shift)
 
         if invchr.empty:
             inv = []
         else:
-            inv = svs_clu(invchr, 'INV', pop_size, args.shift)
+            inv = svs_clu(invchr, 'INV', chrom, args.shift)
 
         if dupchr.empty:
             dup =[]
         else:
-            dup = svs_clu(dupchr,'DUP', pop_size, args.shift)
+            dup = svs_clu(dupchr,'DUP', chrom, args.shift)
 
         if  trachr.empty:
             tra = []
         else:
-            tra = tra_clu(trachr, pop_size, args.shift*2)
+            tra = tra_clu(trachr, chrom, args.shift*2)
         return tra + dels + ins + inv + dup
     # Use ThreadPoolExecutor to process chromosomes in parallel
     with ThreadPoolExecutor() as executor:
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("signal filtering through support reads ratio", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     IN = parser.add_argument_group("Input file ")
     IN.add_argument("-d", dest="sv_dir", required=True, help="the PSVGT output directory")
-    IN.add_argument("-s", dest="shift", default=50, type=int, help="the distance of shifting the breakpoints ")
+    IN.add_argument("-s", dest="shift", default=30, type=int, help="the distance of shifting the breakpoints ")
     IN.add_argument("-M", dest="max", default=6868886, type=int, help="the max SV length ")
     args = parser.parse_args()
     start_t = time()

@@ -47,7 +47,7 @@ def sam_parser2Breaks(region_sam, min_maq):
     return breakpoints, total_map_reads
 
 
-def sam_primary_parser2Breaks_Del(region_sam, min_maq):
+def sam_primary_parser2Breaks_Del(region_sam, min_maq, sv_size):
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
     deletions   = defaultdict(int)    # To store deletions in span format
     total_map_reads = 0
@@ -79,7 +79,8 @@ def sam_primary_parser2Breaks_Del(region_sam, min_maq):
             if ctype in ['M', '=', 'X']:  # Match or mismatch
                 current_start += length  # Increment current position for these types
             elif ctype == 'D':  # Deletion
-                if  length >= 40 :  # Only count size equally 
+            #elif ctype == 'D' and (0.5 * sv_size < length < 2 * sv_size):
+                if  length >= 35 :  # Only count size equally 
                     deletion_start = current_start  # Position before deletion starts
                     deletion_end = current_start + length - 1  # Position before the next base
                     deletion_key = f"{chr}:{deletion_start}-{deletion_end}"
@@ -89,7 +90,7 @@ def sam_primary_parser2Breaks_Del(region_sam, min_maq):
                 current_start += length  # Increment position past deletion
     return breakpoints, deletions, total_map_reads
 
-def sam_primary_parser2Breaks_Ins(region_sam, min_maq):
+def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size):
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
     insertions  = defaultdict(int)   # To store insertions in span format
     total_map_reads = 0
@@ -122,8 +123,8 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq):
                 current_start += length  # Increment current position for these types
             elif ctype == 'D':
                 current_start += length  # Increment position past deletion
-            elif ctype == 'I':  # Insertion
-                if  length > 40 :  # Only count size equally ## to get close del points
+            elif ctype == 'I' and (0.5 * sv_size < length < 2 * sv_size):
+                if  length > 35 :  # Only count size equally ## to get close del points
                     insertion_start = current_start - 1
                     insert_key = f"{chr}:{insertion_start}-{insertion_start + 1}"
                     if insert_key not in insertions:
@@ -165,7 +166,7 @@ def sam_primary_parser2Breaks_dup(region_sam, min_maq, sv_size):
             elif ctype == 'D':
                 current_start += length  # Increment position past deletion
             elif ctype == 'I':  # Insertion
-                if   0.6 * sv_size < length < 1.5 * sv_size  :  # Only count size equally 
+                if   0.5 * sv_size < length < 2 * sv_size  :  # Only count size equally 
                     insertion_start = current_start - 1
                     insert_key = f"{chr}:{insertion_start}-{insertion_start + 1}"
                     if insert_key not in insertions:
@@ -177,9 +178,9 @@ def determine_genotype(entry_ratio):
     """
     ONT easy lead to 0/1 and FP, here we try modify.
     """
-    if entry_ratio > 0.65:
+    if entry_ratio >= 0.650: ## or 0.65   or 0.625
         return "1/1"
-    elif entry_ratio <  0.15:
+    elif entry_ratio <  0.10:
         return "0/0"
     else:
         return "0/1"
@@ -214,7 +215,7 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift):
     sv_end_shift   = set(range(sv_e - shift, sv_e + shift))
     sv_size = abs(sv_size)
     ############ SVIns Case #############
-    breakpoints, inserts, total_map_reads = sam_primary_parser2Breaks_Ins(region_sam, min_maq)
+    breakpoints, inserts, total_map_reads = sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size)
     if total_map_reads == 0:
         info_return.append("./.")
         info_return.append(f"total_map_reads={total_map_reads}")
@@ -246,8 +247,8 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
     genotype = "0/0"  # Default genotype
     sv_start_shift = set(range(sv_s - shift, sv_s + shift))
     sv_end_shift   = set(range(sv_e - shift, sv_e + shift))
-    breakpoints_l, deles_l, total_map_reads_l = sam_primary_parser2Breaks_Del(left_sam,  min_maq)
-    breakpoints_r, deles_r, total_map_reads_r = sam_primary_parser2Breaks_Del(right_sam, min_maq)
+    breakpoints_l, deles_l, total_map_reads_l = sam_primary_parser2Breaks_Del(left_sam,  min_maq, sv_size)
+    breakpoints_r, deles_r, total_map_reads_r = sam_primary_parser2Breaks_Del(right_sam, min_maq, sv_size)
     count_break_and_deles_l = 0
     count_break_and_deles_r = 0
     total_map_reads = total_map_reads_l + total_map_reads_r

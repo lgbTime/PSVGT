@@ -39,21 +39,20 @@ def svs_clu(df, covinfo, csv, max_diff, svtype, chrom):
     cluster_id = 0
     clusdf.loc[0, 'shift_cluster'] = 0
     for i in range(1, len(clusdf)):
-        old_len = df.loc[i - 1, 'SVlen']
-        #old_clu = df.loc[i - 1, 'clu_size']
-        now_len = df.loc[i, 'SVlen']
+        old_len = clusdf.loc[i - 1, 'SVlen']
+        now_len = clusdf.loc[i, 'SVlen']
         relate_size = round(now_len / old_len, 2)
         ## the shift should base SVType and Len, for clu_size > averageDepth/3 or quantile80? we just need a small shift breakpoints  ##
         if  old_len <= 5000:
-            max_diff = 50 +  0.05*old_len
+            max_diff = 100 +  0.05*old_len
         if old_len > 5000:
-            maf_diff = 300 + 0.005*old_len
-        if (abs(clusdf.loc[i, 'Target_start'] - clusdf.loc[i - 1, 'Target_start']) <= max_diff or abs(clusdf.loc[i, 'Target_end'] - clusdf.loc[i - 1, 'Target_end']) <= max_diff) and (0.6 < relate_size < 1.6):
+            maf_diff = 350 + 0.005*old_len
+        if (abs(clusdf.loc[i, 'Target_start'] - clusdf.loc[i - 1, 'Target_start']) <= max_diff or abs(clusdf.loc[i, 'Target_end'] - clusdf.loc[i - 1, 'Target_end']) <= max_diff) and (0.5 < relate_size < 2.0):
             clusdf.loc[i, 'shift_cluster'] = clusdf.loc[i - 1, 'shift_cluster']
         else:
             cluster_id += 1
             clusdf.loc[i, 'shift_cluster'] = cluster_id
-    print(f'The {chrom} {svtype} data shape: {df.shape}\nThe {svtype} data shape after clustering by shifting breakpoints merging to {len(clusdf["shift_cluster"].unique())}')
+    print(f'The {chrom} raw {svtype} signal: {df.shape} after clustering by SVID and  shifting breakpoints merging to {len(clusdf["shift_cluster"].unique())}')
     shift2clu = []
     shift_clus = clusdf.groupby('shift_cluster')
     for cluID, cs in shift_clus:
@@ -63,7 +62,7 @@ def svs_clu(df, covinfo, csv, max_diff, svtype, chrom):
         Target_end = cs.loc[cs['clu_size'].idxmax()].Target_end
         start_local_map = local_cov(covinfo, Target_name, max(0, Target_start - 150), max(Target_start - 50, 0))
         end_local_map = local_cov(covinfo, Target_name, Target_end + 50, Target_end + 150)
-        if cluster_size >= max(start_local_map, end_local_map) * csv:
+        if cluster_size >= max(start_local_map, end_local_map) * csv or cluster_size >= 6:
             SVlen = cs.loc[cs['clu_size'].idxmax()].SVlen
             SVID = cs.loc[cs['clu_size'].idxmax()].SVID
             seq = cs.loc[cs['clu_size'].idxmax()].seq
@@ -81,6 +80,7 @@ def svs_clu(df, covinfo, csv, max_diff, svtype, chrom):
                 'Query_name': reads_name,
                 'maq': meanq
             })
+    print(f'The {chrom} {svtype} {len(clusdf["shift_cluster"].unique())} clusters filter to {len(shift2clu)}')
     return shift2clu
 
 
@@ -114,7 +114,7 @@ def tra_clu(df, covinfo, csv, chrom, max_diff=1000):
         else:
             cluster_id += 1
             clusdf.loc[i, 'cluster_bp1'] = cluster_id
-    print(f'The {chrom} TRA signal shape: {df.shape}\nThe TRA signal data shape after clustering by shift bp1:{int(max_diff)} is {len(clusdf["cluster_bp1"].unique())}')
+    print(f'The {chrom} TRA signal shape: {df.shape} after clustering by shift bp1:{int(max_diff)} is {len(clusdf["cluster_bp1"].unique())}')
 
     bp1_clus = []
     bp1_grouped = clusdf.groupby('cluster_bp1')
@@ -140,6 +140,7 @@ def tra_clu(df, covinfo, csv, chrom, max_diff=1000):
                 'Query_name': query_name,
                 'maq': meanq
             })
+    print(f'The TRA signal clusters {len(clusdf["cluster_bp1"].unique())} filter to {len(bp1_clus)}')
     return bp1_clus
 
 
