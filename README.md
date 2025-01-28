@@ -1,8 +1,14 @@
 ![PSVGT](https://github.com/lgbTime/PSVGT/logo.png)  
-PSVGT is a versatile program for SV detection and genotyping at population scale, supporting all sequence length (>150+ pbs) and depth free, providing CAPS & InDel development Modules and SV annotation function
+    ____                 ______    ______________
+   / __ \____  ____     / ___/ |  / / ____/_  __/
+  / /_/ / __ \/ __ \    \__ \| | / / / __  / /   
+ / ____/ /_/ / /_/ /   ___/ /| |/ / /_/ / / /    
+/_/    \____/ .___/   /____/ |___/\____/ /_/     
+           /_/                              
+## PSVGT is a versatile program for SV detection and genotyping at population scale, supporting all sequence length (>150+ pbs) and depth free, providing CAPS & InDel development Modules and SV annotation function
 The short reads samples will be de novo into contigs, while assemble samples and long reads sequencing data could be directory used in the SV detection and Genotyping.
 ## 💻 Installation
-PSVGT required MEGAHIT,MINIMAP2,SAMTOOLS, and tested at python3.11
+PSVGT required **megahit**, **minimap2**, **samtools**, and has been tested at python3.11
 the  folow python dependency is required.
 ```sh
 pip install primer3-py
@@ -14,10 +20,15 @@ pip install intervaltree
 ```
 
 ## ⏩ Quick Start
-### One-step PSVGT
+### One-Step PSVGT
 
 ```shell
-python PSVGT1.0/PSVGT1.0.py -hifi test_hifi -ont test_ont -pb test_pb -sr test_sr -cr test_cr -r Db-1_ref/Db-1_genome.fa -b yes -o out4PSVGT -msv yes
+python PSVGT1.0/PSVGT1.0.py -hifi test_hifi \
+			    -ont test_ont  \
+			    -pb test_pb  \
+			    -sr test_sr \
+			    -cr test_cr \
+			    -r Db-1_ref/Db-1_genome.fa -b yes -o out4PSVGT -msv yes
 ```
 
 For specific sequence types, PSVGT uses a coordinated mapping strategy and program. In the folders `test_hifi`, `test_ont`, and `test_pb`, the sequencing data should be in gz-compressed FASTQ or mapped BAM format. The samples in the `test_cr` folder should be FASTA files with `.fasta` or `.fa` file extensions. The `test_sr` folder allows paired-end short reads data in gz-compressed FASTQ format.
@@ -60,9 +71,10 @@ python PSVGT1.0/SV_Genotyper/0.Signal4bam_PSVGT.py -b 0_tmp_hifi_5.gz.bam -o 5X 
 (base) ➜  demo python PSVGT1.0/SV_Genotyper/0.Signal4bam_PSVGT.py -b 0_tmp_hifi_5.gz.bam -o 5X -m 40 -maq 30 -dtype hifi -fai ../../../../Db-1_ref/Db-1_genome.fa.fai -msv yes
 **************************************** done SV searching ****************************************
 cost time: 3.157372236251831
+
 (base) ➜  demo ll
-lrwxrwxrwx 1 lgb xinwang   59 Jan 28 20:16 0_tmp_hifi_5.gz.bam -> ../../../../mapt2t_data/hifi/out_hifi_5/0_tmp_hifi_5.gz.bam
-lrwxrwxrwx 1 lgb xinwang   63 Jan 28 20:16 0_tmp_hifi_5.gz.bam.bai -> ../../../../mapt2t_data/hifi/out_hifi_5/0_tmp_hifi_5.gz.bam.bai
+lrwxrwxrwx 1 lgb xinwang   59 Jan 28 20:16 0_tmp_hifi_5.gz.bam 
+lrwxrwxrwx 1 lgb xinwang   63 Jan 28 20:16 0_tmp_hifi_5.gz.bam.bai
 -rw-r--r-- 1 lgb xinwang 2.2M Jan 28 20:24 5X_Db-Chr1.record.txt
 -rw-r--r-- 1 lgb xinwang 2.5M Jan 28 20:24 5X_Db-Chr1.record.txt.cov
 -rw-r--r-- 1 lgb xinwang 228K Jan 28 20:24 5X_Db-Chr1.record.txt.suppAlign
