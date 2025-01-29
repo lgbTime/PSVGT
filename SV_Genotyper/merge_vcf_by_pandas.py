@@ -1,5 +1,19 @@
 import os
 import pandas as pd
+import gzip
+
+def vcf2df(vcfpath, reset=False):
+    is_gzipped = vcfpath.endswith('.gz')
+    if is_gzipped:
+        with gzip.open(vcfpath, 'rt') as f:
+            header = next((i for i, line in enumerate(f) if not line.startswith('##')), 0)
+    else:
+        with open(vcfpath, 'r') as f:
+            header = next((i for i, line in enumerate(f) if not line.startswith('##')), 0)
+    vcf = pd.read_csv(vcfpath, header=header, sep="\t", dtype=str, compression='infer' if is_gzipped else None)
+    return vcf
+
+
 def file_capture(dir, suffix):
     captures = []
     all_files = os.listdir(dir)
@@ -12,13 +26,13 @@ def merge(args):
     file_lists = file_capture(args.dir, '.vcf')
     print(file_lists)
     file_lists.sort()
-    vcf = pd.read_csv(file_lists[0],header=0,index_col=None,sep="\t")
+    vcf = vcf2df(file_lists[0])
     vcf.sort_values(by=["#CHROM","POS"],inplace=True)
     vcf.index = vcf["ID"]
     vcf_gt = vcf[vcf.columns[-1]]
     
     for file_name in file_lists[1:]:
-        vcfi = pd.read_csv(file_name,header=0,index_col=None,sep="\t")
+        vcfi = vcf2df(file_name)
         vcfi.sort_values(by=["#CHROM","POS"],inplace=True)
         vcfi.index = vcfi["ID"]
         vcfi_gt = vcfi[vcfi.columns[-1]]

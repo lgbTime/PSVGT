@@ -314,7 +314,7 @@ if __name__ == "__main__":
     final_gt = f"{args.outdir}/PSVGT_all.vcf2.SVInDel"
     if args.gff:
         run_command(f"python {PSVGT_folder}/SVInDel_Anno/SV_Features_Annotation.py -g {args.gff} -s  {args.outdir}/PSVGT_all.vcf2.SVInDel -m ID -c Parent -o {args.outdir}/SVInDels_Lead_Gene_Variant.txt &")
-        run_command(f"python {PSVGT_folder}/SVInDel_Anno/SV_Features_Position.py {args.gff} {final_gt}_tmp.tab {args.outdir}/PSVInDel && rm {final_gt}_tmp.tab &")
+        run_command(f"python {PSVGT_folder}/SVInDel_Anno/SV_Features_Position.py {args.gff} {final_gt}_tmp.tab {args.outdir}/PSVInDel")
     if args.popcaps == "yes":
         popcaps_cmds = []
         out_lst = open("bam_lst.txt", "w")

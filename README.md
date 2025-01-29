@@ -171,10 +171,61 @@ Db-Chr1	10116536	10116537	-79	79	1/1	total_map_reads=7	INS_rate=1.0;INS
 ```
 
 
-## 🧬 PSVGT Commands
-## The usage will be update sooner or later
- - [CAPSPop] Minor Allele Frequency CAPS Marker developement 
+## 🧬 PSVGT ToolKits Commands
+### A more detail usage will be updated sooner or later
+ - [CAPSPop] Minor Allele Frequency CAPS Marker Developement 
+```shell
+## mpileup to get maf 0.05 SNPs site
+samtools mpileup -b bam_lst.txt -q 55 -Q 30  | python PSVGT1.0/CapsPop/mpileup_stdin4popcasp.py > PopCaps_input.txt
+## CAPS development
+python PSVGT1.0/CapsPop/pop_maf0.05_caps.py PSVGT1.0/CapsPop/common_enzyme.list reference.fa PopCaps_input.txt Out_PopCaps_maf0.05.txt 300 
+rm PopCaps_input.txt
+```
+
  - [SVInDel_Anno]   - Based on gff to annotate the SV impact to GenePAV, Expression, IntronLost, GeneAS, Frameshift
+```shell
+## The PSVGT_all.vc2.SVInDel format 
+head -n 5 out0129/PSVGT_all.vcf2.SVInDel        
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	2_tmp_hifi_5.gz_genotype.txt
+Db-Chr1	10038197	Db-Chr1:10038197-10038740_544	N	<DEL>	.	PASS	.	GT	1/1
+Db-Chr1	10038841	Db-Chr1:10038841-10038842_58	N	<INS>	.	PASS	.	GT	1/1
+Db-Chr1	10116536	Db-Chr1:10116536-10116537_79	N	<INS>	.	PASS	.	GT	1/1
+Db-Chr1	10118152	Db-Chr1:10118152-10118663_512	N	<DEL>	.	PASS	.	GT	1/1
+
+## The gff format mRNA or Gene Line has ID= and CDS Line has Parent=
+Db-Chr1	TAIR10	mRNA	3631	5899	.	+	.	ID=AT1G01010.1;
+Db-Chr1	TAIR10	exon	3631	3913	.	+	.	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	CDS	3760	3913	.	+	0	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	exon	3996	4276	.	+	.	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	CDS	3996	4276	.	+	2	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	exon	4486	4605	.	+	.	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	CDS	4486	4605	.	+	0	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	exon	5174	5326	.	+	.	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	CDS	5174	5326	.	+	0	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	exon	5439	5899	.	+	.	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	CDS	5439	5630	.	+	0	Parent=AT1G01010.1;
+Db-Chr1	TAIR10	mRNA	5928	8737	.	-	.	ID=AT1G01020.1;
+Db-Chr1	TAIR10	exon	5928	6263	.	-	.	Parent=AT1G01020.1;
+Db-Chr1	TAIR10	exon	6437	7069	.	-	.	Parent=AT1G01020.1;
+
+python SVInDel_Anno/SV_Features_Annotation.py -g test.gff3 -s  PSVGT_all.vcf2.SVInDel -m ID -c Parent -o SVInDels_Lead_Gene_Variant.txt
+python SVInDel_Anno/SV_Features_Position.py test.gff3 PSVGT_all.vcf2.SVInDel_tmp.tab PSVInDel
+```
+
  - [SVInDel_Primer] - High quality primers development for SVInDel.
+
+```sh
+head -n 6 PSVGT_all.vcf2.SVInDel 
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	2_tmp_hifi_5.gz_genotype.txt	2_tmp_sr_40X.contigs.fa.gz_genotype.txt	2_tmp_sr_40X.contigs.fa_genotype.txt
+Db-Chr1	137034	Db-Chr1:137034-137160_127	N	<DEL>	.	PASS	.	GT	1/1	1/1	1/1
+Db-Chr1	256076	Db-Chr1:256076-256296_221	N	<DEL>	.	PASS	.	GT	1/1	1/1	1/1
+Db-Chr1	356036	Db-Chr1:356036-357213_1178	N	<DEL>	.	PASS	.	GT	1/1	1/1	1/1
+Db-Chr1	359380	Db-Chr1:359380-359381_88	N	<INS>	.	PASS	.	GT	1/1	1/1	1/1
+Db-Chr1	381761	Db-Chr1:381761-381762_256	N	<INS>	.	PASS	.	GT	1/1	1/1	1/1
+Db-Chr1	399719	Db-Chr1:399719-399720_91	N	<INS>	.	PASS	.	GT	1/1	1/1	1/1
+
+python SVInDel_Primer/vcf2primer.py PSVGT_all.vcf2.SVInDel Db-1_genome.fa 50 500 500 > PSVInDel_Primer4Pop.txt
+```
+
 ## 🔎 More Information
 Please emails me 13414960404@163.com

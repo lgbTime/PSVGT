@@ -1,6 +1,6 @@
 import sys
 import re
-### samtools mpileup bam.list |python $1  > CapsMarker.input
+### samtools mpileup bam.list | python $1  > CapsMarker.input
 def count_bases(sequence):
     # Initialize a dictionary to hold counts
     base_counts = {'A': 0, 'T': 0, 'C': 0, 'G': 0}

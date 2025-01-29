@@ -1,0 +1,1 @@
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	2_tmp_hifi_5.gz_genotype.txt	Seqid	Seq.	Forward primers	Reverse primers	MiniPCR Product Primer	Ref PCR size	Query PCR size
