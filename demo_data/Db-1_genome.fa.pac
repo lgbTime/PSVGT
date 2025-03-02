@@ -1,1 +1,0 @@
-/data/lgb/bin/SVInDel_V1/mapt2t_data/ref_Db/Db-1_genome.fa.pac

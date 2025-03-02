@@ -1,1 +1,0 @@
-../../../../../mapt2t_data/sr/out_sr_30X/04.merged_genotype_file.txt_ClusterIns_ClusterDel.txt
