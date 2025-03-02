@@ -1,11 +1,12 @@
 import pysam
 import re
 
-def process_chromosome(chromosome,chromosome_list, bamfile_path, minLen, maxLen, min_maq, SVsignal_out_path,dtype,msv):
+def process_chromosome(chromosome,chrom_size,chromosome_list, bamfile_path, minLen, maxLen, min_maq, SVsignal_out_path,dtype,msv):
     samfile = pysam.AlignmentFile(bamfile_path, 'rb')
-    with open(f"{SVsignal_out_path}_{chromosome}.record.txt", 'w') as indel_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.cov", 'w') as cov_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.suppAlign", 'w') as supp_sv_out:
+    with open(f"{SVsignal_out_path}_{chromosome}.record.txt", 'w') as indel_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.cov", 'w') as cov_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.suppAlign", 'w') as supp_sv_out, open(f'{SVsignal_out_path}_{chromosome}.record.txt.depth','w') as depth_out:
         # Fetch all reads from the chromosome
         lines = samfile.fetch(chromosome)
+        total_map_lens = 0
         for line in lines:
             if dtype in ['sr', 'cr']:
                 result = svInDel4asm(line, minLen, min_maq)
@@ -17,6 +18,9 @@ def process_chromosome(chromosome,chromosome_list, bamfile_path, minLen, maxLen,
                 cov_out.writelines([cov_line])
             elif dtype in ['pb', 'ont', 'hifi']:
                 svInDels, cov_line, supp_svsignal = svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list)
+                if cov_line:
+                    #print(cov_line)
+                    total_map_lens += int(cov_line.split("\t")[4]) - int(cov_line.split("\t")[3])
                 if svInDels:
                     indel_out.writelines(svInDels)
                 if supp_svsignal:
@@ -24,6 +28,9 @@ def process_chromosome(chromosome,chromosome_list, bamfile_path, minLen, maxLen,
                         supp_sv_out.writelines(f"{sv}\n")
                 if cov_line:
                     cov_out.writelines(cov_line)
+        depth = round( total_map_lens / chrom_size, 2 )
+        depth_out.write(f'{chromosome}\t{chrom_size}\t{total_map_lens}\t{depth}\n')
+        depth_out.close()
         indel_out.close()
         cov_out.close()
         supp_sv_out.close()

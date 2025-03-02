@@ -1,0 +1,3 @@
+#Target_name	Target_start	Target_end	SVlen	SVID	SVType	seq	cluster_size	sv_rate	maq	readsID
+Db-Chr3	12878666	12879273	607	Db-Chr3:12878666-12879273_DEL=607	DEL	*	2	1.0	60	{'k141_145396', 'k141_66790'}
+Db-Chr3	15427785	15427831	46	Db-Chr3:15427785-15427831_DEL=46	DEL	*	2	0.4	60	{'k141_142096', 'k141_143929'}

@@ -19,14 +19,16 @@ def parse_arguments():
 def main():
     args = parse_arguments()
     # Load chromosome list from the fai file
-    chromosome_list = pd.read_csv(args.fai, header=None, sep="\t",dtype=str, index_col=None)[0].tolist()
+    fai = pd.read_csv(args.fai, header=None, sep="\t",dtype=str, index_col=None)
+    chromosome_list =  fai[0].tolist()
+    chrom_size_dict = dict(zip(fai[0], fai[1].astype(int)))
     if args.out[-4:] == ".bam":
         args.out = args.out.replace('.bam', '')
     SVsignal_out_path = f"{args.out}"
     # Use multiprocessing to parallelize the chromosome processing
     with Pool() as pool:
         pool.starmap(sub_Signal4bam_PSVGT.process_chromosome, 
-                     [(chromosome,chromosome_list, args.bam, args.min,args.max, args.maq, SVsignal_out_path,args.dtype,args.msv) 
+                     [(chromosome,chrom_size_dict[chromosome],chromosome_list, args.bam, args.min,args.max, args.maq, SVsignal_out_path,args.dtype,args.msv) 
                       for chromosome in chromosome_list])
     exe_end = time()
     print(f"{'*' * 40} done SV searching {'*' * 40}\ncost time: {exe_end - exe_start}")

@@ -1,0 +1,1 @@
+00_bwa_mem_out/sr_5X_sorted.bam

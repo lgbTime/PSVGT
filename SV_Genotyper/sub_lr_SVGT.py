@@ -80,7 +80,7 @@ def sam_primary_parser2Breaks_Del(region_sam, min_maq, sv_size):
                 current_start += length  # Increment current position for these types
             elif ctype == 'D':  # Deletion
             #elif ctype == 'D' and (0.5 * sv_size < length < 2 * sv_size):
-                if  length >= 35 :  # Only count size equally 
+                if  length >= 40 :  # Only count size equally 
                     deletion_start = current_start  # Position before deletion starts
                     deletion_end = current_start + length - 1  # Position before the next base
                     deletion_key = f"{chr}:{deletion_start}-{deletion_end}"
@@ -124,7 +124,7 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size):
             elif ctype == 'D':
                 current_start += length  # Increment position past deletion
             elif ctype == 'I' and (0.5 * sv_size < length < 2 * sv_size):
-                if  length > 35 :  # Only count size equally ## to get close del points
+                if  length > 40 :  # Only count size equally ## to get close del points
                     insertion_start = current_start - 1
                     insert_key = f"{chr}:{insertion_start}-{insertion_start + 1}"
                     if insert_key not in insertions:
@@ -178,7 +178,7 @@ def determine_genotype(entry_ratio):
     """
     ONT easy lead to 0/1 and FP, here we try modify.
     """
-    if entry_ratio >= 0.650: ## or 0.65   or 0.625
+    if entry_ratio >= 0.625: ## or 0.65   or 0.625
         return "1/1"
     elif entry_ratio <  0.10:
         return "0/0"
@@ -220,6 +220,7 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift):
         info_return.append("./.")
         info_return.append(f"total_map_reads={total_map_reads}")
         info_return.append(f"INS_rate=0;INS")
+        return info_return
     else:
         count_break_and_Ins = 0
         if inserts:  # Check if there are insertion entries
@@ -254,8 +255,9 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
     total_map_reads = total_map_reads_l + total_map_reads_r
     if total_map_reads == 0:
         info_return.append("./.")
-        info_return.append(f"total_map_reads={total_map_reads}")
-        info_return.append(f"DEL_rate=0;DEL")
+        info_return.append(f"total_map_reads_l=0;total_map_reads_r=0")
+        info_return.append(f"deles_l_ratio=0,deles_r_ratio=0;DEL")
+        return  info_return
     if deles_l:  # Check if there are deletion entries ####### if there are deles but not the target deles
         for pos in deles_l.keys():
             dele_s, dele_e = map(int, pos.split(":")[1].split("-"))
@@ -358,7 +360,7 @@ def dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
     if total_map_reads == 0:
         info_return.append("./.")
         info_return.append(f"total_map_reads_bp1=0;total_map_reads_bp2=0")
-        info_return.append(f"{breakpoint1}_ratio=0,{breakpoint2}_ratio=0;{sv_type}")
+        info_return.append(f"bp1={breakpoint1},bp1_ratio=0,bp2={breakpoint2},bp2_ratio=0;{sv_type}")
     
     if inserts_bp1:  # Check if there are insertion entries
         for pos in inserts_bp1.keys():
@@ -395,7 +397,7 @@ def dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
     print(f"{sv_type}\t{genotype}\t{sampleID}\ttotal_mapped_reads:bp1={total_map_reads_bp1};bp2={total_map_reads_bp2}\t{breakpoint1}_ratio={break1_ratio}\t{breakpoint2}_ratio={break2_ratio}\t{breakpoint1}\t{breakpoint2}")
     info_return.append(genotype)
     info_return.append(f"total_map_reads_bp1={total_map_reads_bp1};total_map_reads_bp2={total_map_reads_bp2}")
-    info_return.append(f"{breakpoint1}_ratio={break1_ratio},{breakpoint2}_ratio={break2_ratio};{sv_type}")
+    info_return.append(f"bp1={breakpoint1},bp1_ratio={break1_ratio},bp2={breakpoint2},bp2_ratio={break2_ratio};{sv_type}")
     return info_return
 
 def parse_cigar2clipinfo(cigarstring):
@@ -431,7 +433,7 @@ def traGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
     genotype = determine_genotype(max(bp1_tra, bp2_tra))
     info_return.append(genotype)
     info_return.append(f'total_map_reads_bp1={len(bp1_readsID)};total_map_reads_bp2={len(bp2_readsID)}')
-    info_return.append(f"{chrome1}:{bp1}_supp_ratio={bp1_tra},{chrome2}:{bp2}_supp_ratio={bp2_tra};{'TRA'}")
+    info_return.append(f"bp1={chrome1}:{bp1},bp1_ratio={bp1_tra},bp2={chrome2}:{bp2},bp2_ratio={bp2_tra};TRA")
     return info_return
 
 def supp2INVGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=700):
@@ -496,13 +498,13 @@ def invGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
         genotype = "./."
     if rate >=0.6:
         genotype = '1/1'
-    elif rate < 0.15:
+    elif rate < 0.05:
         genotype = '0/0'
     else:
         genotype = '0/1'
     info_return.append(genotype)
     info_return.append(f'total_map_reads_bp1={bp1_map};total_map_reads_bp2={bp2_map}')
-    info_return.append(f"{chrome1}:{bp1}_rate={rate},{chrome2}:{bp2}_rate={rate};segment_captured;{sv_type}")
+    info_return.append(f"bp1={chrome1}:{bp1},bp1_rate={rate},bp2={chrome2}:{bp2},bp2_rate={rate};{sv_type}")
     return info_return
 
 def supp2dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=800):
@@ -565,13 +567,13 @@ def supp_dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, 
     rate, bp1_map, bp2_map = supp2dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=800)
     if bp1_map + bp2_map == 0:
         genotype = "./."
-    if rate >=0.6:
+    if rate >=0.625:
         genotype = '1/1'
-    elif rate < 0.2:
+    elif rate < 0.1:
         genotype = '0/0'
     else:
         genotype = '0/1'
     info_return.append(genotype)
     info_return.append(f'total_map_reads_bp1={bp1_map};total_map_reads_bp2={bp2_map}')
-    info_return.append(f"{chrome1}:{bp1}_rate={rate},{chrome2}:{bp2}_rate={rate};segment_captured;{sv_type}")
+    info_return.append(f"bp1={chrome1}:{bp1},bp1_rate={rate},bp2={chrome2}:{bp2},bp2_rate={rate};{sv_type}")
     return info_return

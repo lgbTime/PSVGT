@@ -68,12 +68,16 @@ def process_sv(sv_line, mapfile, name, min_maq, shift=100):
 
     if "INV" in info[5]:
         chrome,bp1,bp2 = info[0], int(info[1]),int(info[2])
+        sv_size = int(info[3])
+        if sv_size <= 10000:
+            shift = sv_size * 0.2 ## take sive into  ??
+        else:
+            shift = 2000
         left_most = max(bp1 - shift, 0)  ## aviod the region start at position value less than shift
         bp1_sam = opened_sam.fetch(reference=chrome, start= left_most, end= bp1 + shift)
         bp2_sam = opened_sam.fetch(reference=chrome, start= bp2 - shift, end= bp2 + shift)
-        sv_size = int(info[3])
         out = [chrome, bp1, bp2, sv_size, sv_size]
-        genotype = invGT(sampleID, bp1_sam, bp2_sam, chrome, chrome, bp1, bp2, sv_size, min_maq, "INV",shift=2000)
+        genotype = invGT(sampleID, bp1_sam, bp2_sam, chrome, chrome, bp1, bp2, sv_size, min_maq, "INV",shift=shift)
         return "\t".join(map(str, out + genotype))
 
     if "TRA" in info[5]:

@@ -41,13 +41,15 @@ def svs_clu(df, covinfo, csv, max_diff, svtype, chrom):
     for i in range(1, len(clusdf)):
         old_len = clusdf.loc[i - 1, 'SVlen']
         now_len = clusdf.loc[i, 'SVlen']
+        old_queryname = clusdf.loc[i-1, 'Query_name']
+        now_queryname = clusdf.loc[i, 'Query_name']
         relate_size = round(now_len / old_len, 2)
         ## the shift should base SVType and Len, for clu_size > averageDepth/3 or quantile80? we just need a small shift breakpoints  ##
         if  old_len <= 5000:
             max_diff = 100 +  0.05*old_len
         if old_len > 5000:
             maf_diff = 350 + 0.005*old_len
-        if (abs(clusdf.loc[i, 'Target_start'] - clusdf.loc[i - 1, 'Target_start']) <= max_diff or abs(clusdf.loc[i, 'Target_end'] - clusdf.loc[i - 1, 'Target_end']) <= max_diff) and (0.5 < relate_size < 2.0):
+        if (abs(clusdf.loc[i, 'Target_start'] - clusdf.loc[i - 1, 'Target_start']) <= max_diff or abs(clusdf.loc[i, 'Target_end'] - clusdf.loc[i - 1, 'Target_end']) <= max_diff) and (0.7 < relate_size < 1.5) and old_queryname != now_queryname:
             clusdf.loc[i, 'shift_cluster'] = clusdf.loc[i - 1, 'shift_cluster']
         else:
             cluster_id += 1
@@ -226,17 +228,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("signal filtering through support reads ratio", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     IN = parser.add_argument_group("Input File ")
     IN.add_argument("-f", dest="raw_signal", required=True, help="the raw sv signal record file from 0 step signalling")
-    IN.add_argument("-s", dest="shift", default=1000, type=int, help="the distance shift of breakpoint to cluster the TRA/INV/DUP signal")
-    IN.add_argument("-M", dest="max", type=int, default=6868686, help="the max SV length")
+    IN.add_argument("-s", dest="shift", default=500, type=int, help="the distance shift of breakpoint to cluster the TRA/INV/DUP signal")
+    IN.add_argument("-M", dest="max", type=int, default=16868686, help="the max SV length")
     IN.add_argument("-dtype", dest="dtype", type=str, help="the sequencing type of samples")
-    IN.add_argument("-csv", dest="csv", type=float, default=0.2, help="the paramter to filter the sv signal / local_total < 0.2")
+    IN.add_argument("-csv", dest="csv", type=float, default=0.25, help="the paramter to filter the sv signal / local_total < 0.25")
     IN.add_argument("--cov", dest="covfile", type=str, help= "Coverage File")
     IN.add_argument("--b", dest="bam", type=str, help="the bam file of Individual")
     args = parser.parse_args()
     start_t = time()
     tra_clus, del_clus, ins_clus, inv_clus, dup_clus = candidateSV(args)
-    #import cProfile
-    #cProfile.run('candidateSV(args)')
     if len(tra_clus) >0:
         pd.DataFrame(tra_clus).to_csv(f"{args.raw_signal}_TRA.signal", header=True, sep="\t", index=None)
     if len(dup_clus) >0:

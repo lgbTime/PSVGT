@@ -1,0 +1,2 @@
+#Target_name	Target_start	Target_end	SVlen	SVID	SVType	seq	cluster_size	sv_rate	maq	readsID
+Db-Chr1	20312245	8435531	0	Db-Chr4:8435531_Db-Chr1:20312245	TRA	*	1	1	60	{'k141_86708'}

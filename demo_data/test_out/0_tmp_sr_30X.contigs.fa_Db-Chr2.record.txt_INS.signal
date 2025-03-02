@@ -1,0 +1,2 @@
+#Target_name	Target_start	Target_end	SVlen	SVID	SVType	seq	cluster_size	sv_rate	maq	readsID
+Db-Chr2	2386758	2386759	78	Db-Chr2:2386758-2386759_INS=78	INS	*	2	1.0	60	{'k141_131281', 'k141_83465'}

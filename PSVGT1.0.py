@@ -61,8 +61,9 @@ def file_capture(dir, suffix):
     all_files = os.listdir(dir)
     for file in all_files:
         if file[-len(suffix):] == suffix:
-            print(f"***** capture {suffix} as suffix file in {dir} ******")
+            print(f"************ capture {suffix} as suffix file in {dir} *************")
             captures.append(os.path.join(dir, file))
+    print(f'************ captured file \n{captures} ************')
     return captures 
 
 def pairend2contig(path, threads, ref):
@@ -81,7 +82,7 @@ def pairend2contig(path, threads, ref):
         fq1,fq2 = fqs[i], fqs[i+1]
         fq1_name = basename(fq1)
         # Split by "r1" or "R1"
-        sample_parts = re.split(r'_?R1.gz|_?r1.gz|_?1.fastq.gz|_?1.fq.gz|_?R1.fq.gz|_?R1.fastq.gz|_?r1.fq.gz|_?r1.fastq.gz|_?R1.clean.fastq.gz|_?R1.clean.fq.gz', fq1_name)
+        sample_parts = re.split(r'_?R1.fastq|_?R1.gz|_?r1.gz|_?1.fastq.gz|_?1.fq.gz|_?R1.fq.gz|_?R1.fastq.gz|_?r1.fq.gz|_?r1.fastq.gz|_?R1.clean.fastq.gz|_?R1.clean.fq.gz', fq1_name)
         sample = sample_parts[0]
         print(f"please ensure the paired end data, R1: {fq1} ; R2: {fq2} sample name extract is {sample}")
         assembly_cmd = f"megahit -t {threads} -1 {fq1} -2 {fq2} -o 00_megahit/{sample} --out-prefix {sample} 1>00_megahit_log/{sample}.err 2>00_megahit_log/{sample}.log ; rm -r 00_megahit/{sample}/intermediate_contigs" 
@@ -118,12 +119,12 @@ if __name__ == "__main__":
     parser.add_argument("-minimapCPU", "--minimapCPU", default = 10, help="the cpu in minimap mapping")
     parser.add_argument("-r", "--refGenome", required=True, help="the reference genome ")
     parser.add_argument("-g", "--gff", help="gff file to annotate the SV genotyping")
-    parser.add_argument("-m",  "--min", default=50, help= "The min length of SV ")
+    parser.add_argument("-m",  "--min", default=40, help= "The min length of SV ")
     parser.add_argument("-M",  "--max", default=10000000, help= "The max length of  SV ")
     parser.add_argument("-e",  "--popcaps",default="no", help= "population caps analysis, the caps marker has a maf >= 0.05 will be output, input yes PopCaps will perform the analysis")
     parser.add_argument("-p",  "--popInDel",default="yes", help= "using the primer3 to design the primer for each SVInDel")
     parser.add_argument("-b",  "--breaker",default="no", help= "using the break points info to support the SVInDel Genotyping, this will perform bwa mapping process and breakpoints genotype")
-    parser.add_argument("-maq",  "--maq",default=45,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
+    parser.add_argument("-maq",  "--maq",default=30,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
     parser.add_argument("-csv",  "--csv",default=0.25, type=float, help= "the percent of reads that support a candidate SV (0.25 means at a depth 20X region, a SV signal should have at least 5 reads support, this parameter is for the variaty depth of HIFI/ONT/PB samples")
     parser.add_argument("-msv","--msv_mode",default="no", help= "In msv mode signals of INS,DEL,INV,DUP,TRA will captured from ont/hifi/pb, while for assemble contig from short reads or genome lelve samples we detect SVInDel Only. If no hifi or ont or pacbio data is provided, please setting -msv no, PSVGT will detect SVInDel Only")
 
@@ -193,9 +194,10 @@ if __name__ == "__main__":
                 signal_cmd = f'python {PSVGT_folder}/SV_Genotyper/0.PSVGT_raw2Signal.py -i {contig} -dtype {dtype} -r {args.refGenome} -m {args.min}  -maq {maq} -o {args.outdir} -minimapCPU {args.minimapCPU} -msv {args.msv_mode}'
                 clu2fil_cmds = ''
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 1000 -M {args.max} -csv 0.2 --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov'
+                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov'
                     clu2fil_cmds += clu2fil_cmd
-                final_cmd = signal_cmd + clu2fil_cmds
+                ACC_SV_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/1.ACCSV_Signal_Cluster.py -preffix 0_tmp_{basename(contig)} -fai  {args.refGenome}.fai'
+                final_cmd = signal_cmd + clu2fil_cmds + ACC_SV_cmd
                 Pop_SV_Analysor_cmds.append(final_cmd)
 
     def add_commands4bam(files, dtype):
@@ -206,28 +208,35 @@ if __name__ == "__main__":
                 signal_cmd = f'python {PSVGT_folder}/SV_Genotyper/0.Signal4bam_PSVGT.py -b {bam} -o {args.outdir}/{basename(bam)} -m {args.min} -maq {args.maq} -dtype {dtype} -msv {args.msv_mode} -fai {args.refGenome}.fai' 
                 clu2fil_cmds =''
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -b {bam} -s 1000 -M {args.max} -csv 0.2 --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov'
+                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov'
                     clu2fil_cmds += clu2fil_cmd
-                final_cmd = signal_cmd + clu2fil_cmds
+                ACC_SV_cmd = f' &&  python {PSVGT_folder}/SV_Genotyper/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/{basename(bam).replace(".bam", "")} -fai  {args.refGenome}.fai'
+                final_cmd = signal_cmd + clu2fil_cmds + ACC_SV_cmd
                 Pop_SV_Analysor_cmds.append(final_cmd)
 
     # Capture files for different types
     already_maps = []
     if args.srdir:
-        add_commands4fq(contigs, "sr") #### the short reads assembly reads use ont mode to mapping ####
+        add_commands4fq(contigs, "sr") #### the short reads assembly reads use hifi mode to mapping ####
     if args.hifidir:
         add_commands4fq(file_capture(args.hifidir, ".gz"), "hifi")
+        add_commands4fq(file_capture(args.hifidir, ".fastq"), "hifi")
+        add_commands4fq(file_capture(args.hifidir, ".fq"), "hifi")
         add_commands4bam(file_capture(args.hifidir, ".bam"), "hifi")
         already_maps += file_capture(args.hifidir, ".bam")
     if args.ontdir:
         add_commands4fq(file_capture(args.ontdir, ".gz"), "ont")
+        add_commands4fq(file_capture(args.ontdir, ".fastq"), "ont")
+        add_commands4fq(file_capture(args.ontdir, ".fq"), "ont")
         add_commands4bam(file_capture(args.ontdir, ".bam"), "ont")
-        already_maps += file_capture(args.hifidir, ".bam")
+        already_maps += file_capture(args.ontdir, ".bam")
 
     if args.pbdir:
         add_commands4fq(file_capture(args.pbdir, ".gz"), 'pb')
+        add_commands4fq(file_capture(args.pbdir, ".fastq"), "pb")
+        add_commands4fq(file_capture(args.pbdir, ".fq"), "pb")
         add_commands4bam(file_capture(args.pbdir, ".bam"),'pb')
-        already_maps += file_capture(args.hifidir, ".bam")
+        already_maps += file_capture(args.pbdir, ".bam")
     if args.crdir:
         add_commands4fq(file_capture(args.crdir, ".fasta"), "cr")
         add_commands4fq(file_capture(args.crdir, ".fa"), "cr")
@@ -264,7 +273,7 @@ if __name__ == "__main__":
             print(if_done_name)
             acc_name = basename(mapinfo_file).replace('.bam', '').replace('0_tmp_', '')
 
-            cmd = f"python {PSVGT_folder}/SV_Genotyper/2.Pop_lrSVGT_V1.py -i {args.outdir}/PopSV_clustered_Record.txt -mapf {mapinfo_file}  -n {acc_name} -o {args.outdir} && python {PSVGT_folder}/SV_Genotyper/SVGT_tab2vcf.py {if_done_name} {if_done_name.replace('.txt', '')}.vcf"
+            cmd = f"python {PSVGT_folder}/SV_Genotyper/2.Pop_lrSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {mapinfo_file}  -n {acc_name} -o {args.outdir} && python {PSVGT_folder}/SV_Genotyper/SVGT_tab2vcf.py {if_done_name} {if_done_name.replace('.txt', '')}.vcf"
             print(cmd)
             gt_cmds.append(cmd)
     if len(gt_cmds) >0:

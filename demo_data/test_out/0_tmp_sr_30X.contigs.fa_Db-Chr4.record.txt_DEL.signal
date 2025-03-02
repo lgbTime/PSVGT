@@ -1,0 +1,2 @@
+#Target_name	Target_start	Target_end	SVlen	SVID	SVType	seq	cluster_size	sv_rate	maq	readsID
+Db-Chr4	7839769	7839825	56	Db-Chr4:7839769-7839825_DEL=56	DEL	*	2	0.5	48	{'k141_62206', 'k141_121242'}

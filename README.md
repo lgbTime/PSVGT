@@ -89,8 +89,9 @@ lrwxrwxrwx 1 lgb xinwang   63 Jan 28 20:16 0_tmp_hifi_5.gz.bam.bai
 
 ### 2. SV Signal Cluster and Local Depth Based Filter:
 ```sh
-python PSVGT1.0/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -h
-usage: signal filtering through support reads ratio [-h] -f RAW_SIGNAL [-s SHIFT] [-M MAX] [-dtype DTYPE] [-csv CSV] [--cov COVFILE] [--b BAM]
+python SV_Genotyper/0.KLookCluster_LocalDepthPASS.py   
+usage: signal filtering through support reads ratio [-h] -f RAW_SIGNAL [-s SHIFT] [-M MAX] -dtype DTYPE [--cov COVFILE] [--b BAM]
+signal filtering through support reads ratio: error: the following arguments are required: -f, -dtype
 
 options:
   -h, --help     show this help message and exit
@@ -100,15 +101,14 @@ Input File :
   -s SHIFT       the distance shift of breakpoint to cluster the TRA/INV/DUP signal (default: 1000)
   -M MAX         the max SV length (default: 6868686)
   -dtype DTYPE   the sequencing type of samples (default: None)
-  -csv CSV       the paramter to filter the sv signal / local_total < 0.2 (default: 0.2)
   --cov COVFILE  Coverage File (default: None)
   --b BAM        the bam file of Individual (default: None)
 
-python PSVGT1.0/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f 5X_Db-Chr1.record.txt -s 1000 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f 5X_Db-Chr2.record.txt -s 1000 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f 5X_Db-Chr3.record.txt -s 1000 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f 5X_Db-Chr4.record.txt -s 1000 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f 5X_Db-Chr5.record.txt -s 1000 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr1.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr2.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr3.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr4.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr5.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
 
 ### Signal files will be generated ###
 5X_Db-Chr1.record.txt_DEL.signal  5X_Db-Chr2.record.txt_DUP.signal  5X_Db-Chr3.record.txt_INS.signal  5X_Db-Chr4.record.txt_INV.signal
@@ -119,7 +119,16 @@ python PSVGT1.0/SV_Genotyper/0.SignalCluster_LocalDepthFil.py -f 5X_Db-Chr5.reco
 5X_Db-Chr2.record.txt_DEL.signal  5X_Db-Chr3.record.txt_DUP.signal  5X_Db-Chr4.record.txt_INS.signal  5X_Db-Chr5.record.txt_INV.signal
 
 ```
-### 3. Merge All Signal at Population Scale 
+
+### 3. Merge Individual Chromosome SV Signal
+```sh
+python SV_Genotyper/1.ACCSV_Signal_Cluster.py -h
+usage: signal filtering through support reads ratio [-h] -preffix PREFFIX -fai FAI [-s SHIFT] [-M MAX]
+python SV_Genotyper/1.ACCSV_Signal_Cluster.py -preffix 5X -fai Db-1_genome.fa.fai
+``` 
+Output File: 5X_Cluster_Record.txt
+
+### 4. Merge all Individual SV Signals
 ```sh
 python  PSVGT1.0/SV_Genotyper/1.PSV_signal_cluster.py -h
 usage: signal filtering through support reads ratio [-h] -d SV_DIR [-s SHIFT] [-M MAX]
@@ -132,7 +141,7 @@ Input file :
   -s SHIFT    the distance of shifting the breakpoints (default: 30)
   -M MAX      the max SV length (default: 6868886)
 
-(base) ➜  demo python  PSVGT1.0/SV_Genotyper/1.PSV_signal_cluster.py -d ./ -s 30
+(base) ➜  demo python  PSVGT1.0/SV_Genotyper/1.PSV_signal_cluster.py -d ./ -s 40
 ************************** chromsomes numer is 5 ***************************
 The Db-Chr3 DEL data (805, 11) after clustering by shift:30 is 805
 The Db-Chr4 DEL data (705, 11) after clustering by shift:30 is 705
@@ -227,5 +236,6 @@ Db-Chr1	399719	Db-Chr1:399719-399720_91	N	<INS>	.	PASS	.	GT	1/1	1/1	1/1
 python SVInDel_Primer/vcf2primer.py PSVGT_all.vcf2.SVInDel Db-1_genome.fa 50 500 500 > PSVInDel_Primer4Pop.txt
 ```
 
-## 🔎 More Information
+## 🔎 Note !!!!!!! Information
+The reference genome should not has thousands of chromosome, please remove the small fragment contigs from the genome  
 Please emails me 13414960404@163.com

@@ -23,7 +23,7 @@ def determine_genotype(entry_ratio):
     """
     ONT easy lead to 0/1 and FP, here we try modify.
     """
-    if entry_ratio > 0.6:
+    if entry_ratio > 0.65:
         return "1/1"
     elif entry_ratio <  0.1:
         return "0/0"
@@ -76,7 +76,7 @@ def process_sv(sv_line, mapfile, name, min_maq, shift=100):
             else:
                 bp2_rate = round(signal_num / right_cov, 2)
             dup_gt = determine_genotype(max(bp1_rate,bp2_rate))
-            out = [chrome, bp1, bp2, -sv_size, sv_size, dup_gt, f'total_map_reads_bp1={left_cov};total_map_reads_bp2={right_cov}',f'{chrome}:{bp1}_ratio={bp1_rate},{chrome}:{bp2}_ratio={bp2_rate};DUP']
+            out = [chrome, bp1, bp2, -sv_size, sv_size, dup_gt, f'total_map_reads_bp1={left_cov};total_map_reads_bp2={right_cov}',f'bp1={chrome}:{bp1},bp1_ratio={bp1_rate},bp2={chrome}:{bp2},bp2_ratio={bp2_rate};DUP']
             return "\t".join(map(str, out))
 
         elif "INV" in info[5]:
@@ -89,7 +89,7 @@ def process_sv(sv_line, mapfile, name, min_maq, shift=100):
             else:
                 bp2_rate = round(signal_num / right_cov,2)
             inv_gt = determine_genotype(max(bp1_rate,bp2_rate))
-            out = [chrome, bp1, bp2, -sv_size, sv_size, inv_gt, f'total_map_reads_bp1={left_cov};total_map_reads_bp2={right_cov}',f'{chrome}:{bp1}_ratio={bp1_rate},{chrome}:{bp2}_ratio={bp2_rate};INV']
+            out = [chrome, bp1, bp2, -sv_size, sv_size, inv_gt, f'total_map_reads_bp1={left_cov};total_map_reads_bp2={right_cov}',f'bp1={chrome}:{bp1},bp1_ratio={bp1_rate},bp2={chrome}:{bp2},bp2_ratio={bp2_rate};INV']
             return "\t".join(map(str, out))
     elif "TRA" in info[5]:
         svid = info[4]
@@ -110,7 +110,7 @@ def process_sv(sv_line, mapfile, name, min_maq, shift=100):
         else:
             tra_rate2 = round(signal_num / bp2_cov, 2)
         tra_gt = determine_genotype(max(tra_rate1, tra_rate2))
-        out = [chrome1, bp1, f"{chrome2}:{bp2}", sv_size, sv_size, tra_gt, f'total_map_reads_bp1={bp1_cov};total_map_reads_bp2={bp2_cov}',f'{chrome2}:{bp2}_ratio={tra_rate2},{chrome1}:{bp2}_ratio={tra_rate2};TRA']
+        out = [chrome1, bp1, f"{chrome2}:{bp2}", sv_size, sv_size, tra_gt, f'total_map_reads_bp1={bp1_cov};total_map_reads_bp2={bp2_cov}',f'bp2={chrome2}:{bp2},bp2_ratio={tra_rate2},bp1={chrome1}:{bp2},bp1_ratio={tra_rate2};TRA']
         return "\t".join(map(str, out))
 def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, shift):
     header_line = f"#Target_name\tTarget_start\tTarget_end\tTarget_size\tQuery_size\t{name}\tTotal_Map_Reads\tSV_support"

@@ -1,0 +1,3 @@
+#Target_name	Target_start	Target_end	SVlen	SVID	SVType	seq	cluster_size	sv_rate	maq	readsID
+Db-Chr5	12754126	12754127	72	Db-Chr5:12754126-12754127_INS=72	INS	*	2	0.67	59	{'k141_51780', 'k141_230'}
+Db-Chr5	19521773	19521774	120	Db-Chr5:19521773-19521774_INS=120	INS	*	2	1.0	60	{'k141_34366', 'k141_100355'}

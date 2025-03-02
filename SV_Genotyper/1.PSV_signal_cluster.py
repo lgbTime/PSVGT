@@ -29,7 +29,7 @@ def svs_clu(chrsvdf, svtype, chrom, max_diff=50):
             old_len = df.loc[i-1, 'SVlen']
             now_len = df.loc[i, 'SVlen']
             relate_size = old_len / now_len
-            if abs(df.loc[i, 'Target_start'] - df.loc[i-1, 'Target_start']) <= max_diff and abs(df.loc[i, 'Target_end'] - df.loc[i-1, 'Target_end']) <= max_diff and (0.65 < relate_size < 1.35):
+            if abs(df.loc[i, 'Target_start'] - df.loc[i-1, 'Target_start']) <= max_diff and abs(df.loc[i, 'Target_end'] - df.loc[i-1, 'Target_end']) <= max_diff and (0.8 < relate_size < 1.2):
                 df.loc[i, 'cluster'] = df.loc[i-1, 'cluster']
             else:
                 cluster_id += 1
@@ -41,6 +41,8 @@ def svs_clu(chrsvdf, svtype, chrom, max_diff=50):
     clu = []
     for c in df['cluster'].unique():
         cs = df[df['cluster'] == c]
+        maq = int(cs['maq'].mean())
+        sv_rate = most_common(cs['sv_rate'])
         Target_name = most_common(cs['#Target_name'])
         Target_start = most_common(cs['Target_start'])
         Target_end = most_common(cs['Target_end'])
@@ -57,13 +59,15 @@ def svs_clu(chrsvdf, svtype, chrom, max_diff=50):
             'SVID': SVID,
             'SVType': SVType,
             'seq': seq,
-            'cluster_size': cluster_size,
+            'maq':maq,
+            'cluster_size_prevalent': cluster_size,
+            'sv_rate_prevalent': sv_rate
                 })
     return clu
 
-def tra_clu(tradf, chrom, max_diff=1000):
+def tra_clu(tradf, chrom, max_diff=100):
     df = tradf.copy()
-    df.columns = ["#Target_name1", "Target_start1","Target_start2", "SVlen","SVID",'SVType','seq','cluster_size', 'Query_name', 'maq']
+    df.columns = ["#Target_name1", "Target_start1","Target_start2", "SVlen","SVID",'SVType','seq','maq','cluster_size','sv_rate']
     df["#Target_name2"] = df['SVID'].str.split(":", expand=True)[0]
     df["Target_start1"] = df["Target_start1"].astype(int)
     df["Target_start2"] = df["Target_start2"].astype(int)
@@ -90,8 +94,10 @@ def tra_clu(tradf, chrom, max_diff=1000):
         Target_name = most_common(cs['#Target_name1'])
         Target_start1 = most_common(cs['Target_start1'])
         Target_start2 = most_common(cs['Target_start2'])
-        cluster_size = most_common(cs['cluster_size'])
+        cluster_size =  most_common(cs['cluster_size'])
+        sv_rate = most_common(cs['sv_rate'])
         SVlen =  0
+        maq = cs['maq'].mean()
         SVID =  most_common(cs['SVID'])
         SVType =  "TRA"
         seq = "*"
@@ -103,7 +109,9 @@ def tra_clu(tradf, chrom, max_diff=1000):
             'SVID': SVID,
             'SVType': SVType,
             'seq': seq,
-            'cluster_size': cluster_size,
+            'maq':int(maq),
+            'cluster_size_prevalent': cluster_size,
+            'sv_rate_prevalent':sv_rate
             })
     return clu
 
@@ -130,14 +138,13 @@ def read_file(file_name):
         return None
 
 def candidateSV(args):
-    file_lists = file_capture(args.sv_dir, ".signal")
+    file_lists = file_capture(args.sv_dir, "_Clustered_Record.txt")
     file_lists.sort()
-    chrom_total = len(file_capture(args.sv_dir, ".record.txt"))
-    print(f'************************** chromsomes numer is {chrom_total} ***************************')
+    pop_num = len(file_lists)
+    print(f'************************** The total population number found is {pop_num}\n{file_lists} ***************************')
     sv = pd.read_csv(file_lists[0],header=0,index_col=None,sep="\t")
     for file_name in file_lists[1:]:
         svi = read_file(file_name)
-        #svi = pd.read_csv(file_name,header=0,index_col=None,sep="\t")
         sv = pd.concat([sv,svi],axis=0)
     ori = sv.shape
     sv_types = sv["SVType"].unique()
@@ -173,21 +180,19 @@ def candidateSV(args):
         else:
             tra = tra_clu(trachr, chrom, args.shift*2)
         return tra + dels + ins + inv + dup
-    # Use ThreadPoolExecutor to process chromosomes in parallel
     with ThreadPoolExecutor() as executor:
         results = executor.map(process_chromosome, sv['#Target_name'].unique())
-    # Collect results from all chromosomes
     out = []
     for result in results:
         out += result
     sv_out = pd.DataFrame(out)
     print(sv_out.head())
     sv_out["SVlen"] = sv_out["SVlen"].astype(int)
-    sv_out = sv_out.sort_values(by=['SVID','cluster_size'],inplace=False)
-    sv_fil = sv_out.drop_duplicates(subset='SVID', keep='last', inplace=False) ## keep big cluster_size
-    sv_fil[sv_fil["SVlen"] <= args.max].to_csv(f"{args.sv_dir}/PopSV_clustered_Record.txt",header=True,index=None,sep="\t")
+    sv_out = sv_out.sort_values(by=['SVID'],inplace=False)
+    sv_fil = sv_out.drop_duplicates(subset='SVID', keep='last', inplace=False) 
+    sv_fil[sv_fil["SVlen"] <= args.max].to_csv(f"{args.sv_dir}/PopSV_Candidate_Record.txt",header=True,index=None,sep="\t")
     now = sv_fil.shape
-    print(f'Original data shape: {ori}, after clustering: {now}\nOutput file is {args.sv_dir}/PopSV_clustered_Record.txt')
+    print(f'Original data shape: {ori}, after clustering: {now}\nOutput file is {args.sv_dir}/PopSV_Candidate_Record.txt')
 
 
 if __name__ == "__main__":

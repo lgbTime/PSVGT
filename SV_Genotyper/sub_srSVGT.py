@@ -21,7 +21,8 @@ def sam_parser2Breaks(region_sam, min_maq):
         align_start = int(row.reference_start)
         chr = row.reference_name
         cigar = row.cigarstring
-        if (flag & 0x4) or maq < min_maq:
+        #if (flag & 0x4) or maq < min_maq:
+        if (flag & 0x4):
             continue
         total_map_reads += 1
         cigar_numbers, cigar_types = parse_cigar(cigar)
@@ -36,7 +37,6 @@ def sam_parser2Breaks(region_sam, min_maq):
             update_breakpoints(chr, breakpoints_to_update)
     return breakpoints, total_map_reads
 
-
 def sam_parser2Breaks_Del(region_sam, min_maq):
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
     deletions   = defaultdict(int)    # To store deletions in span format
@@ -50,7 +50,8 @@ def sam_parser2Breaks_Del(region_sam, min_maq):
         align_start = int(row.reference_start)
         chr = row.reference_name
         cigar = row.cigarstring
-        if (flag & 0x4) or maq < min_maq:
+        #if (flag & 0x4) or maq < min_maq:
+        if (flag & 0x4):
             continue
         total_map_reads += 1
         cigar_numbers, cigar_types = parse_cigar(cigar)
@@ -92,7 +93,8 @@ def sam_parser2Breaks_Ins(region_sam, min_maq):
         align_start = row.reference_start
         chr = row.reference_name
         cigar = row.cigarstring
-        if (flag & 0x4) or maq < min_maq:
+        #if (flag & 0x4) or maq < min_maq:
+        if (flag & 0x4):
             continue
         total_map_reads += 1
         cigar_numbers, cigar_types = parse_cigar(cigar)
@@ -241,8 +243,9 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
     total_map_reads = total_map_reads_l + total_map_reads_r
     if total_map_reads == 0:
         info_return.append("1/1") ## not reads properly dele
-        info_return.append(f"total_map_reads={total_map_reads}")
+        info_return.append(f"total_map_reads_l=0;total_map_reads_r=0")
         info_return.append(f"DEL_rate=0;DEL")
+        return info_return
     if deles_l:  # Check if there are deletion entries ####### if there are deles but not the target deles
         for pos in deles_l.keys():
             dele_s, dele_e = map(int, pos.split(":")[1].split("-"))
@@ -307,7 +310,7 @@ def breaks2GT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, m
     if total_map_reads == 0:
         info_return.append("./.") 
         info_return.append(f"total_map_reads_bp1={total_map_reads_bp1};total_map_reads_bp2={total_map_reads_bp2}")
-        info_return.append(f"{breakpoint1}_ratio=0,{breakpoint2}_ratio=0;{sv_type}")
+        info_return.append(f"bp1={breakpoint1},bp1_ratio=0,bp2={breakpoint2},bp2_ratio=0;{sv_type}")
 
     if breakpoints_bp1:
         for breakpoint in breakpoints_bp1.get(chrome1, {}).keys():
@@ -334,5 +337,5 @@ def breaks2GT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, m
     print(f"{sv_type}\t{genotype}\t{sampleID}\ttotal_mapped_reads:bp1={total_map_reads_bp1};bp2={total_map_reads_bp2}\t{breakpoint1}_ratio={break1_ratio}\t{breakpoint2}_ratio={break2_ratio}\t{breakpoint1}_covered_ratio={cov_break1_ratio}\t{breakpoint2}_covered_ratio={cov_break2_ratio}\t{breakpoint1}\t{breakpoint2}")
     info_return.append(genotype)
     info_return.append(f"total_map_reads_bp1={total_map_reads_bp1};total_map_reads_bp2={total_map_reads_bp2}")
-    info_return.append(f"{breakpoint1}_ratio={break1_ratio},{breakpoint2}_ratio={break2_ratio};{sv_type}")
+    info_return.append(f"bp1={breakpoint1},bp1_ratio={break1_ratio},bp2={breakpoint2},bp2_ratio={break2_ratio};{sv_type}")
     return info_return
