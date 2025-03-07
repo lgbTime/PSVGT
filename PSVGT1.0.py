@@ -64,8 +64,9 @@ def file_capture(dir, suffix):
         if file[-len(suffix):] == suffix:
             print(f"************ capture {suffix} as suffix file in {dir} *************")
             captures.append(os.path.join(dir, file))
-    print(f'************ captured file \n{captures} ************')
-    return captures 
+    if captures:
+        print(f'************ captured file ************** \n{captures}')
+    return captures
 
 def pairend2contig(path, threads, ref):
     """
