@@ -3,11 +3,23 @@ import argparse
 from time import time
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
-def svs_clu(chrsvdf, svtype,max_diff=30):
+def mode_or_median(series):
+    """
+    Returns the most common value from a series. If there are ties, it will return the first mode.
+    """
+    return series.mode().iloc[0] if not series.mode().empty else math.floor(series.median())
+
+def most_common(series):
+    """
+    Returns the most common value from a series. If there are ties, it will return the first mode.
+    """
+    return series.mode().iloc[0] if not series.mode().empty else series.iloc[0]
+
+def svs_clu(chrsvdf, svtype, chrom, max_diff=50):
     df = chrsvdf.copy()
     df['Target_start'] = df['Target_start'].astype(int)
     df['Target_end'] = df['Target_end'].astype(int)
-    df = df.sort_values(by=['#Target_name', 'Target_start','SVlen'])
+    df = df.sort_values(by=['#Target_name', 'Target_start'])
     df.index = range(len(df))
     df['cluster'] = -1  # Initializing cluster column
     cluster_id = 0
@@ -25,39 +37,37 @@ def svs_clu(chrsvdf, svtype,max_diff=30):
         else:
             cluster_id += 1
             df.loc[i, 'cluster'] = cluster_id
-    print(f'The {svtype} data shape: {df.shape}\nThe {svtype} data shape after clustering by shift:{int(max_diff)} is {len(df["cluster"].unique())}') 
+    print(f'The {chrom} {svtype} data {df.shape} after clustering by shift:{int(max_diff)} is {len(df["cluster"].unique())}') 
     clu = []
     for c in df['cluster'].unique():
         cs = df[df['cluster'] == c]
-        max_clu_row = cs[cs['cluster_size'] == cs['cluster_size'].max()].iloc[0]
-        Target_name = max_clu_row['#Target_name']
-        Target_start1 = max_clu_row['Target_start']
-        Target_start2 = max_clu_row['Target_end']
-        cluster_size = cs['cluster_size'].sum()
-        SVlen =  cs['SVlen'].max()
         maq = int(cs['maq'].mean())
-        SVID = max_clu_row['SVID']
-        SVType = max_clu_row['SVType']
-        seq = "*"
-        sv_rate = cs['sv_rate'].sum()
+        sv_rate = most_common(cs['sv_rate'])
+        Target_name = most_common(cs['#Target_name'])
+        Target_start = most_common(cs['Target_start'])
+        Target_end = most_common(cs['Target_end'])
+        cluster_size = most_common(cs['cluster_size'])
+        SVlen =  most_common(cs['SVlen'])
+        SVID =  most_common(cs['SVID'])
+        SVType =   most_common(cs['SVType'])
+        seq = most_common(cs['seq'])
         clu.append({
             '#Target_name': Target_name,
-            'Target_start': Target_start1,
-            'Target_end': Target_start2,
+            'Target_start': Target_start,
+            'Target_end': Target_end,
             'SVlen': SVlen,
             'SVID': SVID,
             'SVType': SVType,
             'seq': seq,
             'maq':maq,
-            'cluster_size': cluster_size,
-            'sv_rate': sv_rate
-         })
+            'cluster_size_prevalent': cluster_size,
+            'sv_rate_prevalent': sv_rate
+                })
     return clu
 
-
-def tra_clu(tradf,  max_diff=800):
+def tra_clu(tradf, chrom, max_diff=100):
     df = tradf.copy()
-    df.columns = ["#Target_name1", "Target_start1","Target_start2", "SVlen","SVID",'SVType','seq','cluster_size','sv_rate', 'maq', 'readsID']
+    df.columns = ["#Target_name1", "Target_start1","Target_start2", "SVlen","SVID",'SVType','seq','maq','cluster_size','sv_rate']
     df["#Target_name2"] = df['SVID'].str.split(":", expand=True)[0]
     df["Target_start1"] = df["Target_start1"].astype(int)
     df["Target_start2"] = df["Target_start2"].astype(int)
@@ -77,21 +87,20 @@ def tra_clu(tradf,  max_diff=800):
             cluster_id += 1
             df.loc[i, 'cluster'] = cluster_id
 
-    print(f'The TRA signal shape: {df.shape}\nThe TRA signal data shape after clustering by shift:{int(max_diff)} is {len(df["cluster"].unique())}') 
+    print(f'The {chrom} TRA signal data {tradf.shape} after clustering by shift:{int(max_diff)} is {len(df["cluster"].unique())}') 
     clu = []
     for c in df['cluster'].unique():
         cs = df[df['cluster'] == c]
-        max_clu_row = cs[cs['cluster_size'] == cs['cluster_size'].max()].iloc[0]
-        Target_name = max_clu_row['#Target_name1']
-        Target_start1 = max_clu_row['Target_start1']
-        Target_start2 = max_clu_row['Target_start2']
-        cluster_size = cs['cluster_size'].sum()
-        maq = int(cs['maq'].mean())
-        SVlen = 0
-        SVID = max_clu_row['SVID']
-        SVType = "TRA"
+        Target_name = most_common(cs['#Target_name1'])
+        Target_start1 = most_common(cs['Target_start1'])
+        Target_start2 = most_common(cs['Target_start2'])
+        cluster_size =  most_common(cs['cluster_size'])
+        sv_rate = most_common(cs['sv_rate'])
+        SVlen =  0
+        maq = cs['maq'].mean()
+        SVID =  most_common(cs['SVID'])
+        SVType =  "TRA"
         seq = "*"
-        sv_rate = cs['sv_rate'].sum()
         clu.append({
             '#Target_name': Target_name,
             'Target_start': Target_start1,
@@ -100,41 +109,23 @@ def tra_clu(tradf,  max_diff=800):
             'SVID': SVID,
             'SVType': SVType,
             'seq': seq,
-            'maq': maq,
-            'cluster_size': cluster_size,
-            'sv_rate': sv_rate
-         })
+            'maq':int(maq),
+            'cluster_size_prevalent': cluster_size,
+            'sv_rate_prevalent':sv_rate
+            })
     return clu
 
-import pandas as pd
-
-def drop_ins_from_dup(df):
-    ins = df[df['SVType'].isin(['INS', 'DUP'])]
-    ins = ins.sort_values(by=['#Target_name', 'Target_start'])
-    print(ins.head())
-    ins.index = range(len(ins))
-    dup_rows = ins[ins['SVType'] == 'DUP']
-    if dup_rows.empty:
-        return df
-
-    dropINS = []
-    for index, dup_row in dup_rows.iterrows():
-        start_index = max(0, index - 3)
-        end_index = min(len(df), index + 3)
-        nearby_ins_rows = ins[(ins.index >= start_index) & (ins.index < end_index)]
-        
-        for ins_index, ins_row in nearby_ins_rows.iterrows():
-            if (dup_row['Target_start'] < ins_row['Target_start'] < dup_row['Target_end'] and
-                    dup_row['#Target_name'] == ins_row['#Target_name']):
-                ratio = ins_row['SVlen'] / dup_row['SVlen']
-                if 0.8 <= ratio <= 1.2:
-                    dropINS.append(ins_row['SVID'])
-    filtered_df = df[~df['SVID'].isin(dropINS)]
-    print(f'******************************* drop {len(dropINS)} INS SV since they are DUP **************************************')
-    return filtered_df
-
+def file_capture(dir, suffix):
+    import os
+    captures = []
+    all_files = os.listdir(dir)
+    for file in all_files:
+        if file[-len(suffix):] == suffix:
+            captures.append(os.path.join(dir, file))
+    return captures
 def read_file(file_name):
     import os
+    # Check if the file exists and is not empty
     if os.path.exists(file_name) and os.path.getsize(file_name) > 0:
         try:
             svi = pd.read_csv(file_name, header=0, index_col=None, sep="\t")
@@ -147,22 +138,15 @@ def read_file(file_name):
         return None
 
 def candidateSV(args):
-    from os.path import basename
-    import pandas as pd
-    chrs = pd.read_csv(args.fai,sep="\t",index_col=None,header=None)[0].tolist()
-    file_lists = []
-    for sv in ['INS', 'DEL', 'TRA', 'DUP','INV']:
-        for chrom in chrs:
-            file_name = f"{args.preffix}_{chrom}.record.txt_{sv}.signal"  
-            file_lists.append(file_name)
-    sv = read_file(file_lists[0])
+    file_lists = file_capture(args.sv_dir, "_Clustered_Record.txt")
+    file_lists.sort()
+    pop_num = len(file_lists)
+    print(f'************************** The total population number found is {pop_num}\n{file_lists} ***************************')
+    sv = pd.read_csv(file_lists[0],header=0,index_col=None,sep="\t")
     for file_name in file_lists[1:]:
         svi = read_file(file_name)
         sv = pd.concat([sv,svi],axis=0)
     ori = sv.shape
-    sv_types = sv["SVType"].unique()
-    ori = sv.shape
-
     sv_types = sv["SVType"].unique()
     sv.sort_values(by=["#Target_name","Target_start","SVlen","SVID"], inplace=True)
     def process_chromosome(chrom):
@@ -174,50 +158,52 @@ def candidateSV(args):
         if  delchr.empty:
             dels = []
         else:
-            dels = svs_clu(delchr,'DEL', args.shift)
+            dels = svs_clu(delchr,'DEL', chrom, args.shift)
 
         if inschr.empty:
             ins = []
         else:
-            ins = svs_clu(inschr,'INS', args.shift)
+            ins = svs_clu(inschr,'INS', chrom, args.shift)
 
         if invchr.empty:
             inv = []
         else:
-            inv = svs_clu(invchr, 'INV', args.shift)
+            inv = svs_clu(invchr, 'INV', chrom, args.shift)
 
         if dupchr.empty:
             dup =[]
         else:
-            dup = svs_clu(dupchr,'DUP', args.shift)
+            dup = svs_clu(dupchr,'DUP', chrom, args.shift)
 
         if  trachr.empty:
             tra = []
         else:
-            tra = tra_clu(trachr, args.shift*2)
+            tra = tra_clu(trachr, chrom, args.shift*2)
         return tra + dels + ins + inv + dup
     with ThreadPoolExecutor() as executor:
         results = executor.map(process_chromosome, sv['#Target_name'].unique())
     out = []
     for result in results:
         out += result
-    svs_df = pd.DataFrame(out)
-    sv_out = drop_ins_from_dup(svs_df)
-    sv_out.loc[:,"SVlen"] = sv_out["SVlen"].astype(int)
-    sv_out[sv_out["SVlen"] <= args.max].to_csv(f"{args.preffix}_Clustered_Record.txt",header=True,index=None,sep="\t")
-    now = sv_out.shape
-    print(f'Original data shape: {ori}, after clustering: {now}\nOutput file is {args.preffix}_Clustered_Record.txt')
+    sv_out = pd.DataFrame(out)
+    print(sv_out.head())
+    sv_out["SVlen"] = sv_out["SVlen"].astype(int)
+    sv_out = sv_out.sort_values(by=['SVID'],inplace=False)
+    sv_fil = sv_out.drop_duplicates(subset='SVID', keep='last', inplace=False) 
+    sv_fil[sv_fil["SVlen"] <= args.max].to_csv(f"{args.sv_dir}/PopSV_Candidate_Record.txt",header=True,index=None,sep="\t")
+    now = sv_fil.shape
+    print(f'Original data shape: {ori}, after clustering: {now}\nOutput file is {args.sv_dir}/PopSV_Candidate_Record.txt')
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("signal filtering through support reads ratio", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     IN = parser.add_argument_group("Input file ")
-    IN.add_argument("-preffix", dest="preffix", required=True, help="the sample preffix name of SV raw sginal")
-    IN.add_argument("-fai", dest="fai",required=True, help="the reference faidx file")
-    IN.add_argument("-s", dest="shift", default=100, type=int, help="the distance of shifting the breakpoints ")
+    IN.add_argument("-d", dest="sv_dir", required=True, help="the PSVGT output directory")
+    IN.add_argument("-s", dest="shift", default=30, type=int, help="the distance of shifting the breakpoints ")
     IN.add_argument("-M", dest="max", default=6868886, type=int, help="the max SV length ")
     args = parser.parse_args()
     start_t = time()
     candidateSV(args)
     end_t = time()
     print(f"******************** Time in cluster Cost {end_t - start_t}s *****************************")
+

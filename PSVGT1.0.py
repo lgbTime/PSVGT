@@ -4,8 +4,9 @@ import subprocess
 import re
 import sys
 import shutil
-PSVGT_folder = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(f"{PSVGT_folder}/SV_Genotyper")
+PSVGT = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(f"{PSVGT}/PSV_Genotyper")
+sys.path.append(f"{PSVGT}/PSV_Signal")
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from os.path import basename
 from Sub_readfa2Dict import readfa2Dict
@@ -191,12 +192,12 @@ if __name__ == "__main__":
             done_name = f"{args.outdir}/0_tmp_{basename(contig)}_{fai[0].iloc[-1]}.record.txt" ## last chrom
             if done_name not in done_analysor:
                 maq = min(args.maq + 5, 60) ## biger than illumina breakpoints quality
-                signal_cmd = f'python {PSVGT_folder}/SV_Genotyper/0.PSVGT_raw2Signal.py -i {contig} -dtype {dtype} -r {args.refGenome} -m {args.min}  -maq {maq} -o {args.outdir} -minimapCPU {args.minimapCPU} -msv {args.msv_mode}'
+                signal_cmd = f'python {PSVGT}/PSV_Signal/0.PSVGT_raw2Signal.py -i {contig} -dtype {dtype} -r {args.refGenome} -m {args.min}  -maq {maq} -o {args.outdir} -minimapCPU {args.minimapCPU} -msv {args.msv_mode}'
                 clu2fil_cmds = ''
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov'
+                    clu2fil_cmd = f'&& python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov'
                     clu2fil_cmds += clu2fil_cmd
-                ACC_SV_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/1.ACCSV_Signal_Cluster.py -preffix 0_tmp_{basename(contig)} -fai  {args.refGenome}.fai'
+                ACC_SV_cmd = f'&& python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/0_tmp_{basename(contig)} -fai  {args.refGenome}.fai'
                 final_cmd = signal_cmd + clu2fil_cmds + ACC_SV_cmd
                 Pop_SV_Analysor_cmds.append(final_cmd)
 
@@ -205,12 +206,12 @@ if __name__ == "__main__":
             done_name = f"{args.outdir}/0_tmp_{basename(bam)}_{fai[0].iloc[-1]}.record.txt"
             if done_name not in done_analysor:
                 maq = min(args.maq + 5, 60) ## biger than illumina breakpoints quality
-                signal_cmd = f'python {PSVGT_folder}/SV_Genotyper/0.Signal4bam_PSVGT.py -b {bam} -o {args.outdir}/{basename(bam)} -m {args.min} -maq {args.maq} -dtype {dtype} -msv {args.msv_mode} -fai {args.refGenome}.fai' 
+                signal_cmd = f'python {PSVGT}/PSV_Signal/0.Signal4bam_PSVGT.py -b {bam} -o {args.outdir}/{basename(bam)} -m {args.min} -maq {args.maq} -dtype {dtype} -msv {args.msv_mode} -fai {args.refGenome}.fai' 
                 clu2fil_cmds =''
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'&& python {PSVGT_folder}/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov'
+                    clu2fil_cmd = f'&& python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov'
                     clu2fil_cmds += clu2fil_cmd
-                ACC_SV_cmd = f' &&  python {PSVGT_folder}/SV_Genotyper/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/{basename(bam).replace(".bam", "")} -fai  {args.refGenome}.fai'
+                ACC_SV_cmd = f' &&  python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/{basename(bam).replace(".bam", "")} -fai  {args.refGenome}.fai'
                 final_cmd = signal_cmd + clu2fil_cmds + ACC_SV_cmd
                 Pop_SV_Analysor_cmds.append(final_cmd)
 
@@ -257,7 +258,7 @@ if __name__ == "__main__":
             results1.append((stdout,stderr,returncode,cmd))
     
     ## step1 to get uniq population SV records and clustering the signal by breakpoints shift ##
-    run_command(f"python {PSVGT_folder}/SV_Genotyper/1.PSV_signal_cluster.py -d {args.outdir} -s 50")
+    run_command(f"python {PSVGT}/PSV_Signal/1.PSV_signal_cluster.py -d {args.outdir} -s 50")
     
     ## step2 genotypiing by long seq mapping map ##
     mapinfo_files = file_capture(f"./{args.outdir}", ".bam") + already_maps
@@ -273,7 +274,7 @@ if __name__ == "__main__":
             print(if_done_name)
             acc_name = basename(mapinfo_file).replace('.bam', '').replace('0_tmp_', '')
 
-            cmd = f"python {PSVGT_folder}/SV_Genotyper/2.Pop_lrSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {mapinfo_file}  -n {acc_name} -o {args.outdir} && python {PSVGT_folder}/SV_Genotyper/SVGT_tab2vcf.py {if_done_name} {if_done_name.replace('.txt', '')}.vcf"
+            cmd = f"python {PSVGT}/PSV_Genotyper/2.Pop_lrSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {mapinfo_file}  -n {acc_name} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {if_done_name} {if_done_name.replace('.txt', '')}.vcf"
             print(cmd)
             gt_cmds.append(cmd)
     if len(gt_cmds) >0:
@@ -303,7 +304,7 @@ if __name__ == "__main__":
         bams = file_capture(f"00_bwa_mem_out", ".bam")
         for bam in bams:
             sampleID = basename(bam)[:-4]
-            bpgt_cmd =  f"python {PSVGT_folder}/SV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_clustered_Record.txt -mapf {bam} -s 25 -n {sampleID} -o {args.outdir} && python {PSVGT_folder}/SV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
+            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_clustered_Record.txt -mapf {bam} -s 25 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
             print(bpgt_cmd)
             breaker_gt_cmds.append(bpgt_cmd)
         with open("gt_sv_by_bwa_bam_log.txt", 'w') as sr_bpgt_log:
@@ -313,17 +314,17 @@ if __name__ == "__main__":
     
     ###################### merging the vcf files in vcf.list #######################
     print(f'###################### merging the vcf files  #######################')
-    merge_cmd = f"python {PSVGT_folder}/SV_Genotyper/merge_vcf_by_pandas.py -d {args.outdir} -o {args.outdir}/PSVGT_all.vcf2"
+    merge_cmd = f"python {PSVGT}/PSV_Genotyper/merge_vcf_by_pandas.py -d {args.outdir} -o {args.outdir}/PSVGT_all.vcf2"
     print(merge_cmd)
     run_command(merge_cmd)
     if args.popInDel == "yes":
-        run_command(f"python {PSVGT_folder}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} --min 50 --max 500 --frank 500 --maf 0.01 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
-        print(f"python {PSVGT_folder}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} 50 500 500 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
+        run_command(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} --min 50 --max 500 --frank 500 --maf 0.01 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
+        print(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} 50 500 500 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
     ###################### Annotaion SVInDel For  Population #########################
     final_gt = f"{args.outdir}/PSVGT_all.vcf2.SVInDel"
     if args.gff:
-        run_command(f"python {PSVGT_folder}/SVInDel_Anno/SV_Features_Annotation.py -g {args.gff} -s  {args.outdir}/PSVGT_all.vcf2.SVInDel -m ID -c Parent -o {args.outdir}/SVInDels_Lead_Gene_Variant.txt &")
-        run_command(f"python {PSVGT_folder}/SVInDel_Anno/SV_Features_Position.py {args.gff} {final_gt}_tmp.tab {args.outdir}/PSVInDel")
+        run_command(f"python {PSVGT}/SVInDel_Anno/SV_Features_Annotation.py -g {args.gff} -s  {args.outdir}/PSVGT_all.vcf2.SVInDel -m ID -c Parent -o {args.outdir}/SVInDels_Lead_Gene_Variant.txt &")
+        run_command(f"python {PSVGT}/SVInDel_Anno/SV_Features_Position.py {args.gff} {final_gt}_tmp.tab {args.outdir}/PSVInDel")
     if args.popcaps == "yes":
         popcaps_cmds = []
         out_lst = open("bam_lst.txt", "w")
@@ -332,7 +333,7 @@ if __name__ == "__main__":
             print(bam, file=out_lst)
         out_lst.close()
         for chrom in fa.keys():
-            popcaps_cmd  = f"samtools mpileup -b bam_lst.txt -q 55 -Q 30 -r {chrom} |python {PSVGT_folder}/CapsPop/mpileup_stdin4popcasp.py > PopCaps_{chrom}_input.txt && python {PSVGT_folder}/CapsPop/pop_maf0.05_caps.py {PSVGT_folder}/CapsPop/common_enzyme.list {args.refGenome} PopCaps_{chrom}_input.txt Out_PopCaps_{chrom}_maf0.05.txt 300 && rm PopCaps_{chrom}_input.txt"
+            popcaps_cmd  = f"samtools mpileup -b bam_lst.txt -q 55 -Q 30 -r {chrom} |python {PSVGT}/CapsPop/mpileup_stdin4popcasp.py > PopCaps_{chrom}_input.txt && python {PSVGT}/CapsPop/pop_maf0.05_caps.py {PSVGT}/CapsPop/common_enzyme.list {args.refGenome} PopCaps_{chrom}_input.txt Out_PopCaps_{chrom}_maf0.05.txt 300 && rm PopCaps_{chrom}_input.txt"
             popcaps_cmds.append(popcaps_cmd)
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures4 = [executor.submit(execute_commands, cmd) for cmd in popcaps_cmds ]
