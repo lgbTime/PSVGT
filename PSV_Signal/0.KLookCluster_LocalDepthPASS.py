@@ -127,7 +127,7 @@ def klook_clusters(clusdf, max_diff_func, len_condition_range):
         current_start = clusdf.loc[i, 'Target_start']
         current_end = clusdf.loc[i, 'Target_end']
         found_cluster = False
-        start_index = max(0, i - 4)
+        start_index = max(0, i - 5)
         for j in range(i - 1, start_index - 1, -1):
             old_len = clusdf.loc[j, 'SVlen']
             relate_size = round(current_svlen / old_len, 2)
@@ -158,9 +158,11 @@ def onedepth_all_clus(all_signal, opened_bam):
             return 25
         elif 100 < old_len <= 500:
             return 50
-        elif old_len > 500:
+        elif 500 < old_len > 5000:
             return 100
-    all_clus = klook_clusters(all_signal, max_diff_func, (0.8, 1.2))
+        elif old_len > 5000:
+            return 200
+    all_clus = klook_clusters(all_signal, max_diff_func, (0.7, 1.5))
     sv_chrom = all_clus["#Target_name"].unique()[0]
     svtype = all_clus["SVType"].unique()[0]
     cluster_col = all_clus.columns[-1]
@@ -262,7 +264,7 @@ def windows_slide(dfs, depth):
         i = j
     return windows
 
-def windows_slide4tra(df, shift=1000000):
+def windows_slide4tra(df, shift=2000000):
     """
     Slide windows over translocation data and collect valid windows.
     """
@@ -312,7 +314,7 @@ def klook_clu_tra(win):
         current_start1 = win.loc[i, 'Target_start1']
         current_start2 = win.loc[i, 'Target_start2']
         found_cluster = False
-        start_index = max(0, i - 4)
+        start_index = max(0, i - 40)
         for j in range(i - 1, start_index - 1, -1):
             max_diff = 1000
             ## already ensure chrom1 != chrom2
@@ -352,7 +354,7 @@ def candidate_tra(window, opened_bam, dtype):
         else:
             SV_rate = 1
         if dtype in ['ont','hifi', 'pb']:
-            if sv_eye >= (local_depth * 0.1 + 1):
+            if sv_eye >= (local_depth * 0.1 + 0.5 ):
                 tras.append([chr1, chr1_start, chr2_start, sv_len, svid, "TRA", "*", sv_eye, SV_rate, maq, readsname])
         elif dtype in ['cr', 'sr']:
             if sv_eye > local_depth * 0.25:

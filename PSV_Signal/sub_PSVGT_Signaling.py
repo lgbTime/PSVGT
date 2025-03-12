@@ -159,7 +159,7 @@ def segmentsv4lr(supp_list,min_size, max_size, chromosome_list):
             elif abs(sh4-sh1-len1) <= 500 or abs(sh4-len1-sh2)<= 500:
                 chrom2=supp[2]
                 breakpoint2=supp[4]
-                ## Chr4	ERR3415829.505585   15689499    9991420	0	60	Chr4:15689499_Chr1:9991420_TRA TRA
+                ## should i lower down the maq to capture more signal ???
             if breakpoint1!='' and breakpoint2!='' and maq == 60 and (chromosome_list.index(chrom1) < chromosome_list.index(chrom2)):
                 svid = chrom2+':'+str(breakpoint2)+'_'+chrom1+':'+str(breakpoint1) 
                 svsignal_supp +=[chrom1+'\t'+primary_map[0]+'\t'+str(breakpoint1)+'\t'+str(breakpoint2)+'\t0\t'+str(maq)+"\t"+svid+'\tTRA' + "\t*"]
@@ -248,7 +248,8 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
                     #print(suppinfo)
                     supp_dict[readname] += [suppinfo]
         if supp_dict:
-            if 2<= len(supp_dict[readname]) <= 20:
+            ## 1 or 2
+            if 1<= len(supp_dict[readname]) <= 20:
                 supp_svsignal = segmentsv4lr(supp_dict[readname],minLen, maxLen, chromosome_list)
     return svInDels, covinfo , supp_svsignal
 def svInDel4asm(line, minLen, min_maq):

@@ -515,7 +515,7 @@ def traGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
     readsID truely mapping at chr1_bp1 and chr2_bp2 then count it as support not because it have breakpoints, 
     a repeat or complex region may easy to cause breakpoints, but that kind of reads region is not a tra signal  
     """
-    genotype = '0/0'
+    genotype = "0/0"
     info_return = []
     breaks_dict = {}
     bp1_readsID, maq1 = sam2readsID(bp1_sam)
@@ -530,11 +530,78 @@ def traGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
         bp2_tra = round(len(overlapID) / len(bp2_readsID), 2)
     else:
         bp2_tra = 0
-    genotype = determine_genotype(len(overlapID), min(len(bp1_readsID), len(bp2_readsID)))
+    if max(bp1_tra, bp2_tra) > 0.90:
+        genotype = "1/1"
+    elif bp1_tra >= 0.8 and bp2_tra >= 0.8:
+        genotype = "1/1"
+    elif bp1_tra + bp2_tra < 0.1:
+        genotype = "0/0"
+    else:
+        genotype = "0/1"
     info_return.append(genotype)
+    print(f"************** TRA GT by reads name  ***************\nbp1={chrome1}:{bp1},bp1_ratio={bp1_tra},bp2={chrome2}:{bp2},bp2_ratio={bp2_tra};TRA")
     info_return.append(f'total_map_reads_bp1={len(bp1_readsID)};total_map_reads_bp2={len(bp2_readsID)};maq={max(maq1,maq2)}')
     info_return.append(f"bp1={chrome1}:{bp1},bp1_ratio={bp1_tra},bp2={chrome2}:{bp2},bp2_ratio={bp2_tra};TRA")
     return info_return
+
+def breaks2traGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=800):
+    """
+    Taking two breakpoints region mapping info to genotyping the SV;
+    Here we design this func for genotype of INV, TRA, DUP.
+    Although it will calculates the span of breakpoints,
+    it isnt take these info into genotyping, future may discard or improve.
+    """
+    ############ two breakpoints Case #############
+    info_return = []
+    breaks_dict ={}
+    breakpoint1, breakpoint2 = f"{chrome1}:{bp1}", f"{chrome2}:{bp2}"
+    genotype = "0/0"  
+    bp1_shift = set(range(bp1 - shift, bp1 + shift))
+    bp2_shift   = set(range(bp2 - shift, bp2 + shift))
+    breakpoints_bp1, total_map_reads_bp1, maq1 = sam_parser2Breaks(bp1_sam,  min_maq)
+    breakpoints_bp2, total_map_reads_bp2, maq2 = sam_parser2Breaks(bp2_sam, min_maq)
+    
+    count_break_bp1 = 0
+    count_break_bp2 = 0
+    total_map_reads = total_map_reads_bp1 + total_map_reads_bp2
+    if total_map_reads == 0:
+        info_return.append("./.")
+        info_return.append(f"total_map_reads_bp1=0;total_map_reads_bp2=0;maq=0")
+        info_return.append(f"{breakpoint1}_ratio=0,{breakpoint2}_ratio=0;{sv_type}")
+    if breakpoints_bp1:
+        for breakpoint in breakpoints_bp1.get(chrome1, {}).keys():
+            if breakpoint in bp1_shift:
+                count_break_bp1 += breakpoints_bp1[chrome1][breakpoint]
+    if breakpoints_bp2:
+        for breakpoint in breakpoints_bp2.get(chrome2, {}).keys():
+            if breakpoint in bp2_shift: 
+                count_break_bp2 += breakpoints_bp2[chrome2][breakpoint]
+    if total_map_reads_bp1:
+        break1_ratio =   round(count_break_bp1 / total_map_reads_bp1, 3)
+    else:
+        break1_ratio = 0
+    if total_map_reads_bp2:
+        break2_ratio = round(count_break_bp2 / total_map_reads_bp2, 3)
+    else:
+        break2_ratio = 0
+    max_breaks = max(count_break_bp1, count_break_bp2)
+    breaks_dict[count_break_bp1] = total_map_reads_bp1 
+    breaks_dict[count_break_bp2] = total_map_reads_bp2
+    max_break_ratio = max(break1_ratio, break2_ratio)
+    if max_break_ratio >= 0.9:
+        genotype = "1/1"
+    elif break1_ratio >= 0.85 and break2_ratio >= 0.85:
+        genotype = "1/1"
+    elif break1_ratio+ break2_ratio< 0.10:
+        genotype = "0/0"
+    else:
+        genotype = "0/1"
+    print(f"***breakpoint to genotype TRA********* {sv_type}\t{genotype}\t{sampleID}\ttotal_mapped_reads:bp1={total_map_reads_bp1};bp2={total_map_reads_bp2}\t{breakpoint1}_ratio={break1_ratio}\t{breakpoint2}_ratio={break2_ratio}\t{breakpoint1}\t{breakpoint2} ****************")
+    info_return.append(genotype)
+    info_return.append(f"total_map_reads_bp1={total_map_reads_bp1};total_map_reads_bp2={total_map_reads_bp2};maq={max(maq1,maq2)}")
+    info_return.append(f"{breakpoint1}_ratio={break1_ratio},{breakpoint2}_ratio={break2_ratio};{sv_type}")
+    return info_return
+
 
 def supp2INVGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=800):
     bp1_map, bp2_map, genotype, maq1, maq2 = 0,0,0,0,0

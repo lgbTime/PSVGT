@@ -30,6 +30,8 @@ For specific sequence types, PSVGT uses a coordinated mapping strategy and progr
 - `-r`: Specifies the reference genome.
 - `-o`: Specifies the output folder.
 - `-msv`: Detects all SVs instead of just SVInDels.
+- `-cr`: the samples in test_cr folder should be assembly contigs or genome.
+- `-sr`: the samples in test_sr folder should be short reads paired data.
 
 
 ## Step by Step PSVGT from aready mapped BAM file
