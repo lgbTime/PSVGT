@@ -305,7 +305,7 @@ if __name__ == "__main__":
         bams = file_capture(f"00_bwa_mem_out", ".bam")
         for bam in bams:
             sampleID = basename(bam)[:-4]
-            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_clustered_Record.txt -mapf {bam} -s 50 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
+            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {bam} -s 50 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
             print(bpgt_cmd)
             breaker_gt_cmds.append(bpgt_cmd)
         with open("gt_sv_by_bwa_bam_log.txt", 'w') as sr_bpgt_log:
