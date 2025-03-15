@@ -61,7 +61,7 @@ def candidate_sv(clusdf, opened_bam, support_rate=0.1,add=1):
     if len(top_2clusters) == 2:
         first_count = cluster_counts[top_2clusters[0]]
         second_count = cluster_counts[top_2clusters[1]]
-        if second_count >= 0.2 * first_count:
+        if second_count >= 0.25 * first_count:
             clusters_to_process = top_2clusters
         else:
             clusters_to_process = [top_2clusters[0]]
@@ -158,7 +158,7 @@ def onedepth_all_clus(all_signal, opened_bam):
             return 25
         elif 100 < old_len <= 500:
             return 50
-        elif 500 < old_len > 5000:
+        elif 500 < old_len <= 5000:
             return 100
         elif old_len > 5000:
             return 200
@@ -354,7 +354,8 @@ def candidate_tra(window, opened_bam, dtype):
         else:
             SV_rate = 1
         if dtype in ['ont','hifi', 'pb']:
-            if sv_eye >= (local_depth * 0.1 + 0.5 ):
+            ### to one depth ###
+            if sv_eye >= (local_depth * 0.1 + 0.7 ):
                 tras.append([chr1, chr1_start, chr2_start, sv_len, svid, "TRA", "*", sv_eye, SV_rate, maq, readsname])
         elif dtype in ['cr', 'sr']:
             if sv_eye > local_depth * 0.25:
@@ -416,7 +417,7 @@ def load_and_process_sv_data(args):
     print(f'******************** all chromosomes list {chroms} ****************************')
     return sv_data, chroms, depth
 
-def process_svtype(args, sv_data, chroms, svtype, depth):
+def process_svtype(args, sv_data, chroms, svtype, depth, minLen):
     """
         cov info parse by covfile or bam file
     """
@@ -463,7 +464,7 @@ def process_svtype(args, sv_data, chroms, svtype, depth):
                             if chrom_data[svtype].empty:
                                 print(f'******************************** no {svtype} signal found at {chrom} *******************************')
                                 return []
-                            sv_dfs = chrom_data[svtype][chrom_data[svtype]['SVlen'] > 45]
+                            sv_dfs = chrom_data[svtype][chrom_data[svtype]['SVlen'] >= minLen]
                             #if depth <= 5:
                             #    print("********************* low depth sample ****************************")
                             #    sv_dfs = sv_dfs.sort_values(by=['Target_start', 'SVlen'])
@@ -506,7 +507,7 @@ def process_svtype(args, sv_data, chroms, svtype, depth):
                 chrom_data = {svtype: sv_data[svtype][sv_data[svtype]['#Target_name'] == chrom] for svtype in sv_data}
                 def process_sv_type(svtype):
                     if svtype != "TRA":
-                        sv_dfs = chrom_data[svtype][chrom_data[svtype]['SVlen'] > 45]
+                        sv_dfs = chrom_data[svtype][chrom_data[svtype]['SVlen'] >= minLen]
                         if sv_dfs.empty:
                             print(f'******************************** no {svtype} signal found at {chrom} *******************************')
                             return []
@@ -554,7 +555,7 @@ def candidateSV(args):
     if sv_data:
         sv_types = ["DEL", "INS", "INV", "DUP", "TRA"]
         with multiprocessing.Pool() as pool:
-            results = pool.starmap(process_svtype, [(args, sv_data, chroms, svtype, depth) for svtype in sv_types])
+            results = pool.starmap(process_svtype, [(args, sv_data, chroms, svtype, depth, args.min) for svtype in sv_types])
         tra_clus, del_clus, ins_clus, inv_clus, dup_clus = [], [], [], [], []
         for result in results:
             if result is not None:
@@ -577,6 +578,7 @@ if __name__ == "__main__":
     IN.add_argument("-s", dest="shift", default=800, type=int,
                     help="the distance shift of breakpoint to cluster the TRA/big_INV/big_DUP signal")
     IN.add_argument("-M", dest="max", type=int, default=18888888, help="the max SV length")
+    IN.add_argument("-m", dest="min", type=int, default=45, help="the minimum SV length")
     IN.add_argument("-dtype", dest="dtype", type=str, required=True, help="the sequencing type of samples")
     IN.add_argument("--cov", dest="covfile", type=str, help="Coverage File")
     IN.add_argument("--b", dest="bam", type=str, help="the bam file of Individual")

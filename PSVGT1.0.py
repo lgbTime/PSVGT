@@ -78,6 +78,7 @@ def pairend2contig(path, threads, ref):
     asm_cmds = []
     map_sort_cmds = []
     check_dir("./00_megahit")
+    check_dir(f"00_bwa_mem_out")
     check_dir("./00_megahit_log")
     fqs = recursive_listdir(path)
     for i  in range(0,len(fqs)-1,2):
@@ -91,7 +92,6 @@ def pairend2contig(path, threads, ref):
         asm_cmds.append(assembly_cmd)
         megahit_sample_dir.append(f"00_megahit/{sample}")
         contigs.append(f"00_megahit/{sample}/{sample}.contigs.fa")
-        check_dir(f"00_bwa_mem_out")
         bwa_cmd = f"bwa mem -M -R '@RG\\tID:{sample}\\tSM:{sample}\\tPL:illumina\\tLB:{sample}\\tPU:run' -t {threads} {ref} {fq1} {fq2} | samtools view -buhS | samtools sort -@ 10 -o 00_bwa_mem_out/{sample}_sorted.bam && samtools index 00_bwa_mem_out/{sample}_sorted.bam -@ 10"
         picard_cmd = f"picard MarkDuplicates -I 00_bwa_mem_out/{sample}_sorted.bam -O 00_bwa_mem_out/{sample}.dedup.bam -CREATE_INDEX true -VALIDATION_STRINGENCY SILENT -M 00_bwa_mem_out/{sample}.dedup.metrics && rm {sample}_sorted.bam"
         #map_sort_cmd = bwa_cmd + " && " + picard_cmd
@@ -305,7 +305,7 @@ if __name__ == "__main__":
         bams = file_capture(f"00_bwa_mem_out", ".bam")
         for bam in bams:
             sampleID = basename(bam)[:-4]
-            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_clustered_Record.txt -mapf {bam} -s 25 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
+            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_clustered_Record.txt -mapf {bam} -s 50 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
             print(bpgt_cmd)
             breaker_gt_cmds.append(bpgt_cmd)
         with open("gt_sv_by_bwa_bam_log.txt", 'w') as sr_bpgt_log:

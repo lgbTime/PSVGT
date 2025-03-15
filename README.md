@@ -5,6 +5,7 @@ The short reads samples will be de novo into contigs, while assemble samples and
 PSVGT required **megahit**, **minimap2**, **samtools**, and has been tested at python3.11
 the  folow python dependency is required.
 ```sh
+git clone https://github.com/lgbTime/PSVGT.git
 pip install primer3-py
 pip install pyfiglet
 pip install pandas 

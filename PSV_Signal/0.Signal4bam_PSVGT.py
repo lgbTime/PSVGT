@@ -8,7 +8,7 @@ def parse_arguments():
     IN = parser.add_argument_group("Signal Capture")
     IN.add_argument("-b", dest="bam", required=True, help="sorted bam and index bam only")
     IN.add_argument("-o", dest="out", required=True, help="Output SV signal info file chromsomely")
-    IN.add_argument("-m", dest="min", help="SV min length", default=45, type=int)
+    IN.add_argument("-m", dest="min", help="SV min length", default=40, type=int)
     IN.add_argument("-maq", dest="maq", help="The min mapping quality", default=50, type=int)
     IN.add_argument("-dtype", dest="dtype", required=True, help="The sequence type (ont, hifi, pb, cr, sr)")
     IN.add_argument("-M", dest="max", help="SV max length", default=10000000, type=int)

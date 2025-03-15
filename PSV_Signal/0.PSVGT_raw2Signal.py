@@ -55,7 +55,7 @@ if __name__ == "__main__":
     IN.add_argument("-i", dest="sample",required=True, help="Individual should be a contig fasta file or long sequencing data")
     IN.add_argument("-dtype", dest="dtype",required=True, help="sample type in sr/hifi/ont/pb/cr")
     IN.add_argument("-r", dest="ref", required=True, help="The reference genome fasta file")
-    IN.add_argument("-m", dest="min", help="The min length of an SVInDel", default=50, type=int)
+    IN.add_argument("-m", dest="min", help="The min length of an SVInDel", default=40, type=int)
     IN.add_argument("-maq", dest='maq', help="The min mapping quality", default=50,type=int)
     IN.add_argument("-o", dest="outdir", help="The output directory", default="./")
     IN.add_argument("-minimapCPU", dest="minimapCPU",default=20,type=int, help="The CPU use in minimap mapping")
