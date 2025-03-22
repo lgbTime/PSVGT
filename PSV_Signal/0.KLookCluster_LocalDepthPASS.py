@@ -122,6 +122,7 @@ def klook_clusters(clusdf, max_diff_func, len_condition_range):
         return clusdf
     cluster_id = 0
     clusdf.loc[0, 'shift_cluster'] = 0
+    print(clusdf)
     for i in range(1, len(clusdf)):
         current_svlen = clusdf.loc[i, 'SVlen']
         current_start = clusdf.loc[i, 'Target_start']
@@ -145,6 +146,7 @@ def klook_clusters(clusdf, max_diff_func, len_condition_range):
         if not found_cluster:
             cluster_id += 1
             clusdf.loc[i, 'shift_cluster'] = cluster_id
+    print(clusdf)
     return clusdf
 
 
@@ -379,7 +381,7 @@ def load_and_process_sv_data(args):
     except FileNotFoundError:
         depth = None
     else:
-        depth = None if depth_stat.empty else ceil(float(depth_stat.iloc[0, 3]))
+        depth = None if depth_stat.empty else ceil(float(depth_stat.iloc[0, 3])+0.3)
     print(f'**************** average depth is {depth} ********************')
     if sv_indel_data.empty:
         return {}, [], depth
@@ -514,6 +516,7 @@ def process_svtype(args, sv_data, chroms, svtype, depth, minLen):
                         sv_dfs = sv_dfs.sort_values(by=['Target_start', 'SVlen'])
                         sv_dfs.index = range(len(sv_dfs))
                         print(sv_dfs.head(10))
+                        print("**************************** Calling one depth all clustering ***********************")
                         candidate_svs = onedepth_all_clus(sv_dfs, bam_path)
                         print(candidate_svs[0])
                         return candidate_svs

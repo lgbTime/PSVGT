@@ -1,6 +1,7 @@
 import re
 import subprocess
 from collections import defaultdict
+from math import ceil
 def run_command(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
@@ -21,8 +22,8 @@ def sam_parser2Breaks(region_sam, min_maq):
         align_start = int(row.reference_start)
         chr = row.reference_name
         cigar = row.cigarstring
-        #if (flag & 0x4) or maq < min_maq:
-        if (flag & 0x4):
+        if (flag & 0x4) or maq < min_maq:
+        #if (flag & 0x4):
             continue
         total_map_reads += 1
         cigar_numbers, cigar_types = parse_cigar(cigar)
@@ -37,10 +38,11 @@ def sam_parser2Breaks(region_sam, min_maq):
             update_breakpoints(chr, breakpoints_to_update)
     return breakpoints, total_map_reads
 
-def sam_parser2Breaks_Del(region_sam, min_maq):
+def sam_parser2Breaks_Del(region_sam, min_maq, sv_size, breakpoint_pos,region):
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
     deletions   = defaultdict(int)    # To store deletions in span format
     total_map_reads = 0
+    effective_spans = 0
     def update_breakpoints(chromosome, positions):
         for pos in positions:
             breakpoints[chromosome][pos] += 1
@@ -48,10 +50,10 @@ def sam_parser2Breaks_Del(region_sam, min_maq):
         flag = row.flag
         maq  = row.mapping_quality
         align_start = int(row.reference_start)
-        chr = row.reference_name
+        chrom = row.reference_name
         cigar = row.cigarstring
-        #if (flag & 0x4) or maq < min_maq:
-        if (flag & 0x4):
+        if (flag & 0x4) or maq < min_maq:
+        #if (flag & 0x4):
             continue
         total_map_reads += 1
         cigar_numbers, cigar_types = parse_cigar(cigar)
@@ -63,27 +65,36 @@ def sam_parser2Breaks_Del(region_sam, min_maq):
                 breakpoints_to_update.append(align_start)
             if cigar_types[-1] in 'HS':
                 breakpoints_to_update.append(align_end)
-            update_breakpoints(chr, breakpoints_to_update)
+            update_breakpoints(chrom, breakpoints_to_update)
+        else:
+            if sv_size >= 100:
+                if (align_start + 60 < breakpoint_pos) and (align_end - 60 > breakpoint_pos):
+                    effective_spans += 1
+            else:## small sv full cover
+                if align_start - 10 < region[0] and align_end - 10 > region[1]:
+                    effective_spans += 1
         for i in range(len(cigar_numbers)):
             length = cigar_numbers[i]
             ctype = cigar_types[i]
             if ctype in ['M', '=', 'X']:  # Match or mismatch
                 current_start += length  # Increment current position for these types
             elif ctype == 'D':  # Deletion
-                if  length >= 40 :  # Only count size equally 
+                if  sv_size - 5 <= length <= sv_size + 5 :  # Only count size equally 
                     deletion_start = current_start  # Position before deletion starts
                     deletion_end = current_start + length - 1  # Position before the next base
                     deletion_key = f"{chr}:{deletion_start}-{deletion_end}"
+                    effective_spans -= 1
                     if deletion_key not in deletions:
-                        deletions[deletion_key] = 0
+                        deletions[deletion_key] = 1
                     deletions[deletion_key] += 1  # Count the deletion span
                 current_start += length  # Increment position past deletion
-    return breakpoints, deletions, total_map_reads
+    return breakpoints, deletions, total_map_reads, effective_spans
 
-def sam_parser2Breaks_Ins(region_sam, min_maq):
+def sam_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e):
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
     insertions  = defaultdict(int)   # To store insertions in span format
     total_map_reads = 0
+    effective_span = 0
     def update_breakpoints(chromosome, positions):
         for pos in positions:
             breakpoints[chromosome][pos] += 1
@@ -91,10 +102,10 @@ def sam_parser2Breaks_Ins(region_sam, min_maq):
         flag = row.flag
         maq  = row.mapping_quality
         align_start = row.reference_start
-        chr = row.reference_name
+        chrom = row.reference_name
         cigar = row.cigarstring
-        #if (flag & 0x4) or maq < min_maq:
-        if (flag & 0x4):
+        if (flag & 0x4) or maq < min_maq:
+        #if (flag & 0x4):
             continue
         total_map_reads += 1
         cigar_numbers, cigar_types = parse_cigar(cigar)
@@ -106,7 +117,10 @@ def sam_parser2Breaks_Ins(region_sam, min_maq):
                 breakpoints_to_update.append(align_start)
             if cigar_types[-1] in 'HS':
                 breakpoints_to_update.append(align_end)
-            update_breakpoints(chr, breakpoints_to_update)
+            update_breakpoints(chrom, breakpoints_to_update)
+        else:
+            if (align_start + 50 < sv_s)  and (align_end - 50 > sv_s):
+                effective_span += 1
         for i in range(len(cigar_numbers)):
             length = cigar_numbers[i]
             ctype = cigar_types[i]
@@ -115,13 +129,14 @@ def sam_parser2Breaks_Ins(region_sam, min_maq):
             elif ctype == 'D':
                 current_start += length  # Increment position past deletion
             elif ctype == 'I':  # Insertion
-                if  length > 40 :  # Only count size equally ## to get close del points
+                if sv_size - 5 <= length <= sv_size + 5 :  # Only count size equally ## to get close del points
                     insertion_start = current_start - 1
                     insert_key = f"{chr}:{insertion_start}-{insertion_start + 1}"
                     if insert_key not in insertions:
-                        insertions[insert_key] = 0
+                        insertions[insert_key] = 1
                     insertions[insert_key] += 1  # Count the insertion span
-    return breakpoints, insertions, total_map_reads
+                    effective_span -= 1
+    return breakpoints, insertions, total_map_reads, effective_span
 
 def get_spans(chromosome, start, cigar_types, cigar_numbers):
     """Generate spans based on CIGAR information."""
@@ -144,7 +159,7 @@ def sam_parser2SVInDel_CutSpan(region_sam, min_maq):
     spans = defaultdict(int)
     for row in  region_sam:
         chrom, start, maq, cigar = row.reference_name, row.reference_start, row.mapping_quality, row.cigarstring
-        if maq > min_maq:
+        if maq >= min_maq:
             cigar_numbers, cigar_types = parse_cigar(cigar)
             new_spans = get_spans(chrom, start, cigar_types, cigar_numbers)
             for span_key in new_spans:
@@ -162,20 +177,12 @@ def calculate_coverage(cut_span, sv_point):
     return cov
 
 def determine_genotype(entry_ratio):
-    if entry_ratio > 0.8:
-        return "1/1"
-    elif entry_ratio <  0.25:
-        return "0/0"
-    else:
-        return "0/1"
-
-def determine_genotype(entry_ratio):
     """
     ONT easy lead to 0/1 and FP, here we try modify.
     """
-    if entry_ratio > 0.3:
+    if entry_ratio > 0.65:
         return "1/1"
-    elif entry_ratio <  0.05:
+    elif entry_ratio <  0.02:
         return "0/0"
     else:
         return "0/1"
@@ -192,18 +199,67 @@ def breaksCallGT(break_l_ratio, break_r_ratio):
     else:
         return "0/1"
 
-def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=50):
+
+
+def determine_dupGT(break_l_ratio, break_r_ratio):
+    """
+    Take two breakpoints for Genotype
+    """
+    if break_l_ratio >= 0.25 and break_r_ratio >= 0.25:
+        genotype = "1/1"
+    elif max(break_l_ratio, break_r_ratio ) >= 0.3 and min(break_l_ratio, break_r_ratio) >= 0.1:
+        genotype = "1/1"
+    elif max(break_l_ratio, break_r_ratio) < 0.05:
+        genotype = "0/0"
+    else:
+        genotype = "0/1"
+    return genotype
+
+def determine_invGT(break_l_ratio, break_r_ratio):
+    """
+    Take two breakpoints for Genotype
+    """
+    if break_l_ratio >= 0.6 and break_r_ratio >= 0.6:
+        genotype = "1/1"
+    elif max(break_l_ratio, break_r_ratio ) >= 0.75  and min(break_l_ratio, break_r_ratio) >= 0.3:
+        genotype = "1/1"
+    elif max(break_l_ratio, break_r_ratio) < 0.05:
+        genotype = "0/0"
+    else:
+        genotype = "0/1"
+    return genotype
+
+
+def determine_traGT(break_l_ratio, break_r_ratio):
+    """
+    Take two breakpoints for Genotype
+    """
+    if break_l_ratio >= 0.6 and break_r_ratio >= 0.6:
+        genotype = "1/1"
+    elif max(break_l_ratio, break_r_ratio ) >= 0.75  and min(break_l_ratio, break_r_ratio) >= 0.3:
+        genotype = "1/1"
+    elif max(break_l_ratio, break_r_ratio) < 0.05:
+        genotype = "0/0"
+    else:
+        genotype = "0/1"
+    return genotype
+
+
+def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=100):
     info_return = []
     genotype = "0/0"  # Default genotype
-    sv_start_shift = set(range(sv_s - shift, sv_s + shift))
-    sv_end_shift   = set(range(sv_e - shift, sv_e + shift))
+    #sv_start_shift = set(range(sv_s - shift, sv_s + shift+100))
+    #sv_end_shift   = set(range(sv_e - shift, sv_e + shift+100))
+    sv_start_shift = set(range(sv_s - shift, sv_s + 120))
+    sv_end_shift   = set(range(sv_e - shift, sv_e + 120))
     sv_size = abs(sv_size)
     ############ SVIns Case #############
-    breakpoints, inserts, total_map_reads = sam_parser2Breaks_Ins(region_sam, min_maq)
+    breakpoints, inserts, total_map_reads, effective_spans = sam_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e)
     if total_map_reads == 0:
-        info_return.append(genotype)
+        info_return.append('./.')
         info_return.append(f"total_map_reads={total_map_reads}")
         info_return.append(f"INS_rate=0;INS")
+        return info_return
     else:
         cut_span = sam_parser2SVInDel_CutSpan(region_sam, min_maq)
         count_break_and_Ins = 0
@@ -220,20 +276,41 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=50):
                     count_break_and_Ins += breakpoints[chrome][breakpoint]
         ins_ratio = round(count_break_and_Ins / total_map_reads, 3)
         covIns_ratio = round(covIns / total_map_reads, 3)
+        
+        def determine_genotype(entry_ratio):
+            """
+            ONT easy lead to 0/1 and FP, here we try modify.
+            """
+            if entry_ratio > 0.65:
+                return "1/1"
+            elif entry_ratio <  0.05:
+                return "0/0"
+            else:
+                return "0/1"
+
         genotype = determine_genotype(ins_ratio)
+        if genotype == "0/1" and effective_spans <= 0.01*total_map_reads+1:
+            genotype = "1/1"
+        elif genotype == "1/1" and effective_spans >= 0.05*total_map_reads+1:
+            genotype = "0/1"
+        elif genotype == "0/0":
+            if effective_spans == 0:
+                genotype = "1/1"
+            #else:
+            #    genotype = "0/1"
         print(f"INS\t{genotype}\t{sampleID}\ttotal_mapped_reads:{total_map_reads}\tIns_ratio:{ins_ratio}\tIns_points_covered_ratio:{covIns_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
         info_return.append(genotype)
-        info_return.append(f"total_map_reads={total_map_reads}")
+        info_return.append(f"total_map_reads={total_map_reads};effective_spans={effective_spans}")
         info_return.append(f"INS_rate={ins_ratio};INS")
     return info_return
-def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, shift=50):
+def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, shift=100):
     ############ SVDel Case ##############
     info_return = []
     genotype = "0/0"  # Default genotype
     sv_start_shift = set(range(sv_s - shift, sv_s + shift))
     sv_end_shift   = set(range(sv_e - shift, sv_e + shift))
-    breakpoints_l, deles_l, total_map_reads_l = sam_parser2Breaks_Del(left_sam,  min_maq)
-    breakpoints_r, deles_r, total_map_reads_r = sam_parser2Breaks_Del(right_sam, min_maq)
+    breakpoints_l, deles_l, total_map_reads_l, effective_spans_l = sam_parser2Breaks_Del(left_sam, min_maq, sv_size,  sv_s, [sv_s,sv_e])
+    breakpoints_r, deles_r, total_map_reads_r, effective_spans_r = sam_parser2Breaks_Del(right_sam, min_maq, sv_size, sv_e, [sv_s,sv_e])
     cut_span_l = sam_parser2SVInDel_CutSpan(left_sam, min_maq)
     cut_span_r = sam_parser2SVInDel_CutSpan(right_sam, min_maq)
     covDel_l = calculate_coverage(cut_span_l, sv_s)
@@ -244,7 +321,7 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
     if total_map_reads == 0:
         info_return.append("1/1") ## not reads properly dele
         info_return.append(f"total_map_reads_l=0;total_map_reads_r=0")
-        info_return.append(f"DEL_rate=0;DEL")
+        info_return.append(f"deles_l_ratio=0;deles_r_ratio=0")
         return info_return
     if deles_l:  # Check if there are deletion entries ####### if there are deles but not the target deles
         for pos in deles_l.keys():
@@ -279,9 +356,18 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
         covDel_r_ratio = 0
     deles_ratio = max(deles_l_ratio, deles_r_ratio)
     genotype = determine_genotype(deles_ratio)
+    if genotype == "0/1":
+        if effective_spans_l + effective_spans_r == 0: #0.01*total_map_reads + 1:
+            genotype = "1/1"
+    elif genotype == "1/1":
+        if (effective_spans_l + effective_spans_r) >= (0.3 * total_map_reads + 2):
+            genotype = "0/1"
+    elif genotype == "0/0":
+        if effective_spans_l + effective_spans_r == 0:
+            genotype = '1/1'
     print(f"DEL\t{genotype}\t{sampleID}\ttotal_mapped_reads_l={total_map_reads_l};total_mapped_reads_r={total_map_reads_r}\tdeles_l_ratio:{deles_l_ratio}\tdeles_r_ratio:{deles_r_ratio}\tdele_l_covered_ratio:{covDel_l_ratio}\tdele_r_covered_ratio:{covDel_r_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
     info_return.append(genotype)
-    info_return.append(f"total_map_reads_l={total_map_reads_l};total_map_reads_r={total_map_reads_r}")
+    info_return.append(f"total_map_reads_l={total_map_reads_l},span_l={effective_spans_l};total_map_reads_r={total_map_reads_r},span_r={effective_spans_r}")
     info_return.append(f"deles_l_ratio={deles_l_ratio},deles_r_ratio={deles_r_ratio};DEL")
     return info_return
 
@@ -333,9 +419,59 @@ def breaks2GT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, m
         break2_ratio = 0
         cov_break2_ratio = 0
     max_break_ratio = max(break1_ratio, break2_ratio)
-    genotype = breaksCallGT(break1_ratio, break2_ratio)
+    if sv_type == "DUP":
+        genotype = determine_dupGT(break1_ratio, break2_ratio)
+    elif sv_type == "INV":
+        genotype = determine_invGT(break1_ratio, break2_ratio)
+    elif sv_type == "TRA":
+        genotype = determine_traGT(break1_ratio, break2_ratio)
     print(f"{sv_type}\t{genotype}\t{sampleID}\ttotal_mapped_reads:bp1={total_map_reads_bp1};bp2={total_map_reads_bp2}\t{breakpoint1}_ratio={break1_ratio}\t{breakpoint2}_ratio={break2_ratio}\t{breakpoint1}_covered_ratio={cov_break1_ratio}\t{breakpoint2}_covered_ratio={cov_break2_ratio}\t{breakpoint1}\t{breakpoint2}")
     info_return.append(genotype)
     info_return.append(f"total_map_reads_bp1={total_map_reads_bp1};total_map_reads_bp2={total_map_reads_bp2}")
     info_return.append(f"bp1={breakpoint1},bp1_ratio={break1_ratio},bp2={breakpoint2},bp2_ratio={break2_ratio};{sv_type}")
     return info_return
+
+def sam2readsID(region_sam):
+    readsID = []
+    maqs = 0
+    for row in region_sam:
+        flag = row.flag
+        maq  = row.mapping_quality
+        maqs += maq
+        readID = row.query_name
+        readsID.append(readID)
+    if not readsID:
+        return [], 0
+    else:
+        return readsID, ceil(maqs / len(readsID))
+
+def traGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=50):
+    genotype = "0/0"
+    info_return = []
+    breaks_dict = {}
+    bp1_readsID, maq1 = sam2readsID(bp1_sam)
+    bp2_readsID, maq2 = sam2readsID(bp2_sam)
+
+    overlapID = list(set(bp1_readsID) & set(bp2_readsID))
+    if bp1_readsID:
+        bp1_tra = round(len(overlapID) /  len(bp1_readsID), 2)
+    else:
+        bp1_tra = 0
+    if bp2_readsID:
+        bp2_tra = round(len(overlapID) / len(bp2_readsID), 2)
+    else:
+        bp2_tra = 0
+    if max(bp1_tra, bp2_tra) > 0.90:
+        genotype = "1/1"
+    elif bp1_tra >= 0.8 and bp2_tra >= 0.8:
+        genotype = "1/1"
+    elif bp1_tra + bp2_tra < 0.1:
+        genotype = "0/0"
+    else:
+        genotype = "0/1"
+    info_return.append(genotype)
+    print(f"************** TRA GT by reads name  ***************\nbp1={chrome1}:{bp1},bp1_ratio={bp1_tra},bp2={chrome2}:{bp2},bp2_ratio={bp2_tra};TRA")
+    info_return.append(f'total_map_reads_bp1={len(bp1_readsID)};total_map_reads_bp2={len(bp2_readsID)};maq={max(maq1,maq2)}')
+    info_return.append(f"bp1={chrome1}:{bp1},bp1_ratio={bp1_tra},bp2={chrome2}:{bp2},bp2_ratio={bp2_tra};TRA")
+    return info_return
+

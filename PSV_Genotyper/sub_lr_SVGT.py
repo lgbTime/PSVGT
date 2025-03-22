@@ -94,15 +94,15 @@ def sam_primary_parser2Breaks_Del(region_sam, min_maq, sv_size):
             ctype = cigar_types[i]
             if ctype in ['M', '=', 'X']:  # Match or mismatch
                 current_start += length  # Increment current position for these types
-            elif ctype == 'D':  # Deletion
-            #elif ctype == 'D' and (0.5 * sv_size < length < 2 * sv_size):
-                if  length >= 40 :  # Only count size equally 
+            elif ctype == 'D':
+                if 0.5 * sv_size < length < 2 * sv_size:
                     deletion_start = current_start  # Position before deletion starts
                     deletion_end = current_start + length - 1  # Position before the next base
                     deletion_key = f"{chr}:{deletion_start}-{deletion_end}"
                     if deletion_key not in deletions:
-                        deletions[deletion_key] = 0
-                    deletions[deletion_key] += 1  # Count the deletion span
+                        deletions[deletion_key] = 1
+                    else:
+                        deletions[deletion_key] += 1  # Count the deletion span
                 current_start += length  # Increment position past deletion
     if total_map_reads >0:
         return breakpoints, deletions, total_map_reads, ceil(maqs / total_map_reads)
@@ -147,11 +147,11 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start):
             elif ctype == 'D':
                 current_start += length  # Increment position past deletion
             elif ctype == 'I' and (0.5 * sv_size < length < 2 * sv_size):
-                if  length > 40 :  # Only count size equally ## to get close del points
-                    insertion_start = current_start - 1
-                    insert_key = f"{chr}:{insertion_start}-{insertion_start + 1}"
-                    if insert_key not in insertions:
-                        insertions[insert_key] = 0
+                insertion_start = current_start - 1
+                insert_key = f"{chr}:{insertion_start}-{insertion_start + 1}"
+                if insert_key not in insertions:
+                    insertions[insert_key] = 1
+                else:
                     insertions[insert_key] += 1  # Count the insertion span
     if total_map_reads >0:
         return breakpoints, insertions, total_map_reads, ceil(maqs / total_map_reads)
@@ -195,12 +195,13 @@ def sam_primary_parser2Breaks_dup(region_sam, min_maq, sv_size):
             elif ctype == 'D':
                 current_start += length  
             elif ctype == 'I':  # Insertion
-                if   0.7 * sv_size < length < 1.5 * sv_size  :  # Only count size equally 
+                if  0.7 * sv_size < length < 1.5 * sv_size  :  # Only count size equally 
                     insertion_start = current_start - 1
                     insert_key = f"{chr}:{insertion_start}-{insertion_start + 1}"
                     if insert_key not in insertions:
-                        insertions[insert_key] = 0
-                    insertions[insert_key] += 1  # Count the insertion span
+                        insertions[insert_key] = 1
+                    else:
+                        insertions[insert_key] += 1  # Count the insertion span
     if total_map_reads > 0:
         return breakpoints, insertions, total_map_reads, ceil(maqs / total_map_reads)
     else:
@@ -213,7 +214,7 @@ def determine_genotype(breaks, depth):
     if depth == 0:
         return "./."
     if depth <= 5:
-        if breaks / depth  >= 0.75:
+        if breaks / depth  >= 0.95:
             return "1/1"
         elif breaks / depth < 0.1:
             return "0/0"
@@ -221,7 +222,7 @@ def determine_genotype(breaks, depth):
             return "0/1"
 
     if 5 < depth <= 10:
-        if 0.6 * depth + 1 <=  breaks:
+        if 0.75 * depth + 1 <=  breaks:
             return "1/1"
         elif 0.05 * depth + 1 > breaks:
             return "0/0"

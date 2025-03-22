@@ -4,7 +4,6 @@ import subprocess
 import re
 import sys
 import shutil
-import multiprocessing
 PSVGT = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(f"{PSVGT}/PSV_Genotyper")
 sys.path.append(f"{PSVGT}/PSV_Signal")
@@ -186,65 +185,37 @@ if __name__ == "__main__":
                     print(stdout,file=all_log)
                 results0.append((stdout,stderr,returncode,cmd))
     
+    ############# SVInDel population mode step0 #############
+    Pop_SV_Analysor_cmds = []
     done_analysor = file_capture(args.outdir, ".record.txt")
-    def run_clu2fil_cmd(clu2fil_cmd):
-        try:
-            subprocess.run(clu2fil_cmd, shell=True, check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Error running command: {clu2fil_cmd}\n{e}")
-
     def add_commands4fq(files, dtype):
         for contig in files:
-            done_name = f"{args.outdir}/0_tmp_{basename(contig)}_{fai[0].iloc[-1]}.record.txt"  ## last chrom
+            done_name = f"{args.outdir}/0_tmp_{basename(contig)}_{fai[0].iloc[-1]}.record.txt" ## last chrom
             if done_name not in done_analysor:
-                maq = min(args.maq, 60)
+                maq = min(args.maq, 60) 
                 signal_cmd = f'python {PSVGT}/PSV_Signal/0.PSVGT_raw2Signal.py -i {contig} -dtype {dtype} -r {args.refGenome} -m {args.min}  -maq {maq} -o {args.outdir} -minimapCPU {args.minimapCPU} -msv {args.msv_mode}'
-                try:
-                    subprocess.run(signal_cmd, shell=True, check=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"Error running signal command: {signal_cmd}\n{e}")
-                    continue
-
-                clu2fil_cmds = []
+                clu2fil_cmds = ''
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov'
-                    clu2fil_cmds.append(clu2fil_cmd)
-                pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-                pool.map(run_clu2fil_cmd, clu2fil_cmds)
-                pool.close()
-                pool.join()
-
-                ACC_SV_cmd = f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/0_tmp_{basename(contig)} -fai  {args.refGenome}.fai'
-                try:
-                    subprocess.run(ACC_SV_cmd, shell=True, check=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"Error running ACC_SV command: {ACC_SV_cmd}\n{e}")
+                    clu2fil_cmd = f'&& python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov'
+                    clu2fil_cmds += clu2fil_cmd
+                ACC_SV_cmd = f'&& python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/0_tmp_{basename(contig)} -fai  {args.refGenome}.fai'
+                final_cmd = signal_cmd + clu2fil_cmds + ACC_SV_cmd
+                Pop_SV_Analysor_cmds.append(final_cmd)
 
     def add_commands4bam(files, dtype):
         for bam in files:
             done_name = f"{args.outdir}/0_tmp_{basename(bam)}_{fai[0].iloc[-1]}.record.txt"
             if done_name not in done_analysor:
-                maq = min(args.maq, 60)  ## biger than illumina breakpoints quality
-                signal_cmd = f'python {PSVGT}/PSV_Signal/0.Signal4bam_PSVGT.py -b {bam} -o {args.outdir}/{basename(bam)} -m {args.min} -maq {args.maq} -dtype {dtype} -msv {args.msv_mode} -fai {args.refGenome}.fai'
-                try:
-                    subprocess.run(signal_cmd, shell=True, check=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"Error running signal command: {signal_cmd}\n{e}")
-                    continue
-                clu2fil_cmds = []
+                maq = min(args.maq + 5, 60) ## biger than illumina breakpoints quality
+                signal_cmd = f'python {PSVGT}/PSV_Signal/0.Signal4bam_PSVGT.py -b {bam} -o {args.outdir}/{basename(bam)} -m {args.min} -maq {args.maq} -dtype {dtype} -msv {args.msv_mode} -fai {args.refGenome}.fai' 
+                clu2fil_cmds =''
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov'
-                    clu2fil_cmds.append(clu2fil_cmd)
-                pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-                pool.map(run_clu2fil_cmd, clu2fil_cmds)
-                pool.close()
-                pool.join()
+                    clu2fil_cmd = f'&& python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov'
+                    clu2fil_cmds += clu2fil_cmd
+                ACC_SV_cmd = f' &&  python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/{basename(bam).replace(".bam", "")} -fai  {args.refGenome}.fai'
+                final_cmd = signal_cmd + clu2fil_cmds + ACC_SV_cmd
+                Pop_SV_Analysor_cmds.append(final_cmd)
 
-                ACC_SV_cmd = f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/{basename(bam).replace(".bam", "")} -fai  {args.refGenome}.fai'
-                try:
-                    subprocess.run(ACC_SV_cmd, shell=True, check=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"Error running ACC_SV command: {ACC_SV_cmd}\n{e}")
     # Capture files for different types
     already_maps = []
     if args.srdir:
@@ -272,10 +243,21 @@ if __name__ == "__main__":
         add_commands4fq(file_capture(args.crdir, ".fasta"), "cr")
         add_commands4fq(file_capture(args.crdir, ".fa"), "cr")
         add_commands4bam(file_capture(args.crdir, ".bam"), "cr")
-        #add_commands4bam(file_capture(args.crdir, ".gz"), "cr")
         already_maps += file_capture(args.crdir, ".bam")
 
 
+    # Execute commands using ThreadPool
+    with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+        futures1 = [executor.submit(execute_commands, cmd) for cmd in Pop_SV_Analysor_cmds]
+        results1 =[]
+        for future in as_completed(futures1):
+            stdout, stderr, returncode, cmd = future.result()  # Wait on each result future:
+            if returncode != 0:
+                print(f"Error executing command: {cmd}" , file=all_log)
+            else:
+                print(stdout,file=all_log)
+            results1.append((stdout,stderr,returncode,cmd))
+    
     ## step1 to get uniq population SV records and clustering the signal by breakpoints shift ##
     run_command(f"python {PSVGT}/PSV_Signal/1.PSV_signal_cluster.py -d {args.outdir} -s 50")
     
@@ -323,7 +305,7 @@ if __name__ == "__main__":
         bams = file_capture(f"00_bwa_mem_out", ".bam")
         for bam in bams:
             sampleID = basename(bam)[:-4]
-            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {bam} -s 50 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
+            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_clustered_Record.txt -mapf {bam} -s 50 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
             print(bpgt_cmd)
             breaker_gt_cmds.append(bpgt_cmd)
         with open("gt_sv_by_bwa_bam_log.txt", 'w') as sr_bpgt_log:
