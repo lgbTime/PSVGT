@@ -38,7 +38,7 @@ def sam_parser2Breaks(region_sam, min_maq):
             update_breakpoints(chr, breakpoints_to_update)
     return breakpoints, total_map_reads
 
-def sam_parser2Breaks_Del(region_sam, min_maq, sv_size, breakpoint_pos,region):
+def sam_parser2Breaks_Del(region_sam, min_maq, sv_size, breakpoint_pos,region, span_bp):
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
     deletions   = defaultdict(int)    # To store deletions in span format
     total_map_reads = 0
@@ -68,7 +68,7 @@ def sam_parser2Breaks_Del(region_sam, min_maq, sv_size, breakpoint_pos,region):
             update_breakpoints(chrom, breakpoints_to_update)
         else:
             if sv_size >= 100:
-                if (align_start + 60 < breakpoint_pos) and (align_end - 60 > breakpoint_pos):
+                if (align_start + span_bp < breakpoint_pos) and (align_end - span_bp > breakpoint_pos):
                     effective_spans += 1
             else:## small sv full cover
                 if align_start - 10 < region[0] and align_end - 10 > region[1]:
@@ -90,7 +90,7 @@ def sam_parser2Breaks_Del(region_sam, min_maq, sv_size, breakpoint_pos,region):
                 current_start += length  # Increment position past deletion
     return breakpoints, deletions, total_map_reads, effective_spans
 
-def sam_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e):
+def sam_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e, span_bp):
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
     insertions  = defaultdict(int)   # To store insertions in span format
     total_map_reads = 0
@@ -119,7 +119,7 @@ def sam_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e):
                 breakpoints_to_update.append(align_end)
             update_breakpoints(chrom, breakpoints_to_update)
         else:
-            if (align_start + 50 < sv_s)  and (align_end - 50 > sv_s):
+            if (align_start + span_bp < sv_s)  and (align_end - span_bp > sv_s):
                 effective_span += 1
         for i in range(len(cigar_numbers)):
             length = cigar_numbers[i]
@@ -245,7 +245,7 @@ def determine_traGT(break_l_ratio, break_r_ratio):
     return genotype
 
 
-def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=100):
+def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=100, span_bp=50):
     info_return = []
     genotype = "0/0"  # Default genotype
     #sv_start_shift = set(range(sv_s - shift, sv_s + shift+100))
@@ -254,7 +254,7 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=100):
     sv_end_shift   = set(range(sv_e - shift, sv_e + 120))
     sv_size = abs(sv_size)
     ############ SVIns Case #############
-    breakpoints, inserts, total_map_reads, effective_spans = sam_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e)
+    breakpoints, inserts, total_map_reads, effective_spans = sam_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e, span_bp)
     if total_map_reads == 0:
         info_return.append('./.')
         info_return.append(f"total_map_reads={total_map_reads}")
@@ -303,14 +303,14 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=100):
         info_return.append(f"total_map_reads={total_map_reads};effective_spans={effective_spans}")
         info_return.append(f"INS_rate={ins_ratio};INS")
     return info_return
-def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, shift=100):
+def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, shift=100, span_bp=50):
     ############ SVDel Case ##############
     info_return = []
     genotype = "0/0"  # Default genotype
     sv_start_shift = set(range(sv_s - shift, sv_s + shift))
     sv_end_shift   = set(range(sv_e - shift, sv_e + shift))
-    breakpoints_l, deles_l, total_map_reads_l, effective_spans_l = sam_parser2Breaks_Del(left_sam, min_maq, sv_size,  sv_s, [sv_s,sv_e])
-    breakpoints_r, deles_r, total_map_reads_r, effective_spans_r = sam_parser2Breaks_Del(right_sam, min_maq, sv_size, sv_e, [sv_s,sv_e])
+    breakpoints_l, deles_l, total_map_reads_l, effective_spans_l = sam_parser2Breaks_Del(left_sam, min_maq, sv_size,  sv_s, [sv_s,sv_e], span_bp)
+    breakpoints_r, deles_r, total_map_reads_r, effective_spans_r = sam_parser2Breaks_Del(right_sam, min_maq, sv_size, sv_e, [sv_s,sv_e], span_bp)
     cut_span_l = sam_parser2SVInDel_CutSpan(left_sam, min_maq)
     cut_span_r = sam_parser2SVInDel_CutSpan(right_sam, min_maq)
     covDel_l = calculate_coverage(cut_span_l, sv_s)
@@ -319,7 +319,7 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
     count_break_and_deles_r = 0
     total_map_reads = total_map_reads_l + total_map_reads_r
     if total_map_reads == 0:
-        info_return.append("1/1") ## not reads properly dele
+        info_return.append("1/1") ## no reads properly dele
         info_return.append(f"total_map_reads_l=0;total_map_reads_r=0")
         info_return.append(f"deles_l_ratio=0;deles_r_ratio=0")
         return info_return
@@ -357,7 +357,7 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
     deles_ratio = max(deles_l_ratio, deles_r_ratio)
     genotype = determine_genotype(deles_ratio)
     if genotype == "0/1":
-        if effective_spans_l + effective_spans_r == 0: #0.01*total_map_reads + 1:
+        if effective_spans_l + effective_spans_r == 0:
             genotype = "1/1"
     elif genotype == "1/1":
         if (effective_spans_l + effective_spans_r) >= (0.3 * total_map_reads + 2):

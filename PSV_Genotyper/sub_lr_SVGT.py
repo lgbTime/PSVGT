@@ -1,7 +1,7 @@
 import re
 import subprocess
 from collections import defaultdict
-from math import ceil
+from math import ceil,floor
 def run_command(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
@@ -115,6 +115,7 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start):
     total_map_reads = 0
     spans = 0
     maqs = 0
+    effective_span = 0
     def update_breakpoints(chromosome, positions):
         for pos in positions:
             breakpoints[chromosome][pos] += 1
@@ -139,6 +140,10 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start):
             if cigar_types[-1] in 'HS':
                 breakpoints_to_update.append(align_end)
             update_breakpoints(chr, breakpoints_to_update)
+        else:
+            if (align_start + 1000 < sv_start)  and (align_end - 1000 > sv_start):
+                effective_span += 1
+
         for i in range(len(cigar_numbers)):
             length = cigar_numbers[i]
             ctype = cigar_types[i]
@@ -152,11 +157,13 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start):
                 if insert_key not in insertions:
                     insertions[insert_key] = 1
                 else:
-                    insertions[insert_key] += 1  # Count the insertion span
+                    insertions[insert_key] += 1
+                effective_span -= 1
+
     if total_map_reads >0:
-        return breakpoints, insertions, total_map_reads, ceil(maqs / total_map_reads)
+        return breakpoints, insertions, total_map_reads, ceil(maqs / total_map_reads), effective_span
     else:
-        return {},{},0,0
+        return {},{},0,0,effective_span
 def sam_primary_parser2Breaks_dup(region_sam, min_maq, sv_size):
     ## some dup signal may hide in I cigar ##
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
@@ -207,22 +214,22 @@ def sam_primary_parser2Breaks_dup(region_sam, min_maq, sv_size):
     else:
         return {}, {}, 0, 0
 
-def determine_genotype(breaks, depth):
+def determine_genotype(breaks, depth, homo_rate=0.75,ref_rate = 0.05):
     """
     depth and ratio base genotype
     """
     if depth == 0:
         return "./."
     if depth <= 5:
-        if breaks / depth  >= 0.95:
+        if floor(homo_rate*depth) + 1 <= breaks:
             return "1/1"
-        elif breaks / depth < 0.1:
+        elif breaks / depth <= 0.2: ## 2 reads --> 5X
             return "0/0"
         else:
             return "0/1"
 
     if 5 < depth <= 10:
-        if 0.75 * depth + 1 <=  breaks:
+        if homo_rate * depth + 1 <=  breaks:
             return "1/1"
         elif 0.05 * depth + 1 > breaks:
             return "0/0"
@@ -230,21 +237,21 @@ def determine_genotype(breaks, depth):
             return "0/1"
     
     if depth > 10:
-        if breaks / depth >= 0.75: ## or 0.65   or 0.625
+        if breaks / depth >= homo_rate: ## or 0.65   or 0.625
             return "1/1"
-        elif breaks / depth <  0.05:
+        elif breaks / depth < ref_rate:
             return "0/0"
         else:
             return "0/1"
 
-def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift):
+def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, ref_rate, shift):
     info_return = []
     genotype = "0/0"  # Default genotype
     shift = min(sv_size, 500)
     sv_start_shift = set(range(sv_s - shift, sv_s + shift ))
     dup_shift = set(range(sv_s - 1000, sv_s - 1000)) ## samll dup capture as ins
     ############ SVIns Case #############
-    breakpoints, inserts, total_map_reads, maq = sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s)
+    breakpoints, inserts, total_map_reads, maq, effective_span = sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s)
     if total_map_reads == 0:
         info_return.append("./.")
         info_return.append(f"total_map_reads={total_map_reads},maq=0")
@@ -262,14 +269,18 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift):
                 if breakpoint in sv_start_shift: 
                     count_break_and_Ins += breakpoints[chrome][breakpoint]
         ins_ratio = round(count_break_and_Ins / total_map_reads, 3)
-        genotype = determine_genotype(count_break_and_Ins, total_map_reads)
+        genotype = determine_genotype(count_break_and_Ins, total_map_reads, homo_rate, ref_rate)
+        if genotype == "1/1":
+            if floor(0.1*total_map_reads) + 1 <=  effective_span:
+                genotype = "0/1"
+                print(f"***************Correting SVINS {chrom}:{sv_s}-{sv_e} genotype to 0/1 since it has {effective_span} span reads*****************")
         print(f"INS\t{genotype}\t{sampleID}\ttotal_mapped_reads:{total_map_reads}\tIns_ratio:{ins_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
         info_return.append(genotype)
         info_return.append(f"total_map_reads={total_map_reads},maq={maq}")
         info_return.append(f"INS_rate={ins_ratio};INS")
     return info_return
 
-def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, shift):
+def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift):
     ############ SVDel Case ##############
     info_return = []
     breaks_dict = {}
@@ -317,7 +328,7 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
     breaks_dict[count_break_and_deles_l ] = total_map_reads_l
     breaks_dict[count_break_and_deles_r ] = total_map_reads_r
     max_breaks = max(count_break_and_deles_l,count_break_and_deles_r)
-    genotype = determine_genotype(max_breaks,breaks_dict[max_breaks])
+    genotype = determine_genotype(max_breaks,breaks_dict[max_breaks], homo_rate, ref_rate)
     print(f"DEL\t{genotype}\t{sampleID}\ttotal_mapped_reads_l={total_map_reads_l};total_mapped_reads_r={total_map_reads_r}\tdeles_l_ratio:{deles_l_ratio}\tdeles_r_ratio:{deles_r_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
     info_return.append(genotype)
     info_return.append(f"total_map_reads_l={total_map_reads_l};total_map_reads_r={total_map_reads_r};maq={max(maq_l,maq_r)}")

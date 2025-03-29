@@ -127,9 +127,12 @@ if __name__ == "__main__":
     parser.add_argument("-e",  "--popcaps",default="no", help= "population caps analysis, the caps marker has a maf >= 0.05 will be output, input yes PopCaps will perform the analysis")
     parser.add_argument("-p",  "--popInDel",default="yes", help= "using the primer3 to design the primer for each SVInDel")
     parser.add_argument("-b",  "--breaker",default="no", help= "using the break points info to support the SVInDel Genotyping, this will perform bwa mapping process and breakpoints genotype")
-    parser.add_argument("-maq",  "--maq",default=30,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
+    parser.add_argument("-maq",  "--maq",default=1,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
     parser.add_argument("-csv",  "--csv",default=0.25, type=float, help= "the percent of reads that support a candidate SV (0.25 means at a depth 20X region, a SV signal should have at least 5 reads support, this parameter is for the variaty depth of HIFI/ONT/PB samples")
     parser.add_argument("-msv","--msv_mode",default="no", help= "In msv mode signals of INS,DEL,INV,DUP,TRA will captured from ont/hifi/pb, while for assemble contig from short reads or genome lelve samples we detect SVInDel Only. If no hifi or ont or pacbio data is provided, please setting -msv no, PSVGT will detect SVInDel Only")
+    parser.add_argument("-lr_homo_rate", dest="lr_homo_rate",default=0.75, type=float, help="to determine a homozygous site, if 0.75 of the local mapping signal suport the sv the genotyoe will be 1/1")
+    parser.add_argument("-lr_ref_rate", dest="lr_ref_rate",default=0.05, type=float, help="to determine reference allele, in a 100X data, if suport of local signal less than 0.05, the genotype will be 0/0")
+    parser.add_argument("-span", dest="span", default=50, type=int, help="heterzygous evdence, a read (maping start - 50) < breakpoint < (mapping end - 50) will be taken as span the breakpoint, for 150 bp reads we suggest 50, for 125bp may be 45 will be better")
 
     args = parser.parse_args()
     start_t = time()
@@ -293,7 +296,7 @@ if __name__ == "__main__":
             print(if_done_name)
             acc_name = basename(mapinfo_file).replace('.bam', '').replace('0_tmp_', '')
 
-            cmd = f"python {PSVGT}/PSV_Genotyper/2.Pop_lrSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {mapinfo_file}  -n {acc_name} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {if_done_name} {if_done_name.replace('.txt', '')}.vcf"
+            cmd = f"python {PSVGT}/PSV_Genotyper/2.Pop_lrSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {mapinfo_file} -m {args.maq} -lr_homo_rate {args.lr_homo_rate} -lr_ref_rate {args.lr_ref_rate}  -n {acc_name} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {if_done_name} {if_done_name.replace('.txt', '')}.vcf"
             print(cmd)
             gt_cmds.append(cmd)
     if len(gt_cmds) >0:
@@ -323,7 +326,7 @@ if __name__ == "__main__":
         bams = file_capture(f"00_bwa_mem_out", ".bam")
         for bam in bams:
             sampleID = basename(bam)[:-4]
-            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {bam} -s 50 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
+            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {bam} -m {args.maq} -span {args.span} -s 50 -n {sampleID} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
             print(bpgt_cmd)
             breaker_gt_cmds.append(bpgt_cmd)
         with open("gt_sv_by_bwa_bam_log.txt", 'w') as sr_bpgt_log:

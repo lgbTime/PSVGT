@@ -16,7 +16,7 @@ def makedir(path):
 def run_command(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
-def process_sv(sv_line, opened_sam, name, min_maq, shift=100):
+def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=100):
     sampleID = name
     info = sv_line.strip().split("\t")
     if "DEL" in info[5]:
@@ -25,7 +25,7 @@ def process_sv(sv_line, opened_sam, name, min_maq, shift=100):
         left_most = max(sv_s - shift, 0)
         left_sam = opened_sam.fetch(reference=chrome, start=left_most, end=sv_s + shift)
         right_sam = opened_sam.fetch(reference=chrome, start=sv_e - shift, end=sv_e + shift)
-        genotype = delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, shift=200)
+        genotype = delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift=200)
         out = [chrome, sv_s, sv_e, sv_size, -sv_size]
         return "\t".join(map(str, out + genotype))
 
@@ -36,7 +36,7 @@ def process_sv(sv_line, opened_sam, name, min_maq, shift=100):
         sv_size = int(info[3])
         left_most = max(sv_s - shift, 0)
         region_sam = opened_sam.fetch(reference=chrome, start=left_most, end=sv_e + shift)
-        genotype = insGT(sampleID, region_sam, chrome, sv_s, sv_e, sv_size, min_maq, shift=200)
+        genotype = insGT(sampleID, region_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift=200)
         out = [chrome, sv_s, sv_e, -sv_size, sv_size]
         return "\t".join(map(str, out + genotype))
 
@@ -92,18 +92,18 @@ def process_sv(sv_line, opened_sam, name, min_maq, shift=100):
 
 
 def process_chromosome(args):
-    chromosome_lines, mapf, name, min_maq, shift = args
+    chromosome_lines, mapf, name, min_maq, homo_rate, ref_rate, shift = args
     opened_sam = pysam.AlignmentFile(mapf, "rb")
     chromosome_output = []
     for line in chromosome_lines:
-        result = process_sv(line, opened_sam, name, min_maq, shift)
+        result = process_sv(line, opened_sam, name, min_maq, homo_rate, ref_rate, shift)
         if result:
             chromosome_output.append(result)
     opened_sam.close()
     return chromosome_output
 
 
-def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, shift):
+def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, homo_rate, ref_rate, shift):
     header_line = f"#Target_name\tTarget_start\tTarget_end\tTarget_size\tQuery_size\t{name}\tTotal_Map_Reads\tSV_support"
     with open(supp_sv_table, "r") as svf:
         sv_lines = svf.readlines()
@@ -118,7 +118,7 @@ def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, shift):
 
     output_lines = []
     with Pool(processes=5) as pool:
-        args_list = [(lines, mapf, name, min_maq, shift) for _, lines in chromosome_groups.items()]
+        args_list = [(lines, mapf, name, min_maq, homo_rate, ref_rate, shift) for _, lines in chromosome_groups.items()]
         results = list(tqdm(pool.imap(process_chromosome, args_list), total=len(args_list)))
         for result in results:
             output_lines.extend(result)
@@ -139,10 +139,12 @@ if __name__ == "__main__":
     IN.add_argument("-m", dest="maq", default=20, type=int, help="the mini mapping quality of the contigs, range from 20 - 60, default is 20")
     IN.add_argument("-s", dest="shift", default=150, type=int, help="breakpoints may shifting, here we shift 150bp as default")
     IN.add_argument("-mapf", dest="mapf", required=True, help="the mapping file of sample in sam or bam format")
+    IN.add_argument("-lr_homo_rate", dest="lr_homo_rate",default=0.75, type=float, help="to determine a homozygous site, if 0.75 of the local mapping signal suport the sv the genotyoe will be 1/1")
+    IN.add_argument("-lr_ref_rate", dest="lr_ref_rate",default=0.05, type=float, help="to determine reference allele, in a 100X data, if suport of local signal less than 0.05, the genotype will be 0/0")
     IN.add_argument("-n", dest="ACC", required=True, help="Accession name of the Individual")
     IN.add_argument("-o", dest="dir", required=True, help="the output dir")
     args = parser.parse_args()
     start_t = time()
-    svGenotyper(args.sv_info, args.mapf, args.ACC, args.dir, args.maq, args.shift)
+    svGenotyper(args.sv_info, args.mapf, args.ACC, args.dir, args.maq, args.lr_homo_rate, args.lr_ref_rate, args.shift)
     end_t = time()
     print(f"******************* Cost time {end_t - start_t}s *********************")
