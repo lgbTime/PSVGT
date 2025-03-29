@@ -86,7 +86,7 @@ For specific sequence types, PSVGT uses a coordinated mapping strategy and progr
 
 ### 1. SV sigaling from bam file
 ```sh
-(base) ➜  demo python PSVGT1.0/SV_Genotyper/0.Signal4bam_PSVGT.py -h
+(base) ➜  demo python PSVGT1.0/PSV_Signal/0.Signal4bam_PSVGT.py -h
 usage: SV signal extract from sam file [-h] -b BAM -o OUT [-m MIN] [-maq MAQ] -dtype DTYPE [-M MAX]
                                        [-fai FAI] [-msv MSV]
 options:
@@ -103,10 +103,10 @@ Signal Capture:
   -msv MSV      Detecting complex SVs (INV, DP, TRA, INS, DEL) from supplementary alignment (default:
                 no)
 
-python PSVGT1.0/SV_Genotyper/0.Signal4bam_PSVGT.py -b 0_tmp_hifi_5.gz.bam -o 5X -m 40 -maq 30 -dtype hifi -fai Db-1_genome.fa.fai -msv yes
+python PSVGT1.0/PSV_Signal/0.Signal4bam_PSVGT.py -b 0_tmp_hifi_5.gz.bam -o 5X -m 40 -maq 30 -dtype hifi -fai Db-1_genome.fa.fai -msv yes
 
 ## out result ##
-(base) ➜  demo python PSVGT1.0/SV_Genotyper/0.Signal4bam_PSVGT.py -b 0_tmp_hifi_5.gz.bam -o 5X -m 40 -maq 30 -dtype hifi -fai ../../../../Db-1_ref/Db-1_genome.fa.fai -msv yes
+(base) ➜  demo python PSVGT1.0/PSV_Signal/0.Signal4bam_PSVGT.py -b 0_tmp_hifi_5.gz.bam -o 5X -m 40 -maq 30 -dtype hifi -fai ../../../../Db-1_ref/Db-1_genome.fa.fai -msv yes
 **************************************** done SV searching ****************************************
 cost time: 3.157372236251831
 
@@ -133,7 +133,7 @@ lrwxrwxrwx 1 lgb xinwang   63 Jan 28 20:16 0_tmp_hifi_5.gz.bam.bai
 
 ### 2. SV Signal Cluster and Local Depth Based Filter:
 ```sh
-python SV_Genotyper/0.KLookCluster_LocalDepthPASS.py   
+python PSV_Signal/0.KLookCluster_LocalDepthPASS.py   
 usage: signal filtering through support reads ratio [-h] -f RAW_SIGNAL [-s SHIFT] [-M MAX] -dtype DTYPE [--cov COVFILE] [--b BAM]
 signal filtering through support reads ratio: error: the following arguments are required: -f, -dtype
 
@@ -148,11 +148,11 @@ Input File :
   --cov COVFILE  Coverage File (default: None)
   --b BAM        the bam file of Individual (default: None)
 
-python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr1.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr2.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr3.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr4.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr5.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr1.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr2.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr3.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr4.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr5.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
 
 ### Signal files will be generated ###
 5X_Db-Chr1.record.txt_DEL.signal  5X_Db-Chr2.record.txt_DUP.signal  5X_Db-Chr3.record.txt_INS.signal  5X_Db-Chr4.record.txt_INV.signal
@@ -166,15 +166,15 @@ python PSVGT1.0/SV_Genotyper/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr5.rec
 
 ### 3. Merge Individual Chromosome SV Signal
 ```sh
-python SV_Genotyper/1.ACCSV_Signal_Cluster.py -h
+python PSV_Signal/1.ACCSV_Signal_Cluster.py -h
 usage: signal filtering through support reads ratio [-h] -preffix PREFFIX -fai FAI [-s SHIFT] [-M MAX]
-python SV_Genotyper/1.ACCSV_Signal_Cluster.py -preffix 5X -fai Db-1_genome.fa.fai
+python PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix 5X -fai Db-1_genome.fa.fai
 ``` 
 Output File: 5X_Cluster_Record.txt
 
 ### 4. Merge all Individual SV Signals
 ```sh
-python  PSVGT1.0/SV_Genotyper/1.PSV_signal_cluster.py -h
+python  PSVGT1.0/PSV_Signal/1.PSV_signal_cluster.py -h
 usage: signal filtering through support reads ratio [-h] -d SV_DIR [-s SHIFT] [-M MAX]
 
 options:
@@ -185,7 +185,7 @@ Input file :
   -s SHIFT    the distance of shifting the breakpoints (default: 30)
   -M MAX      the max SV length (default: 6868886)
 
-(base) ➜  demo python  PSVGT1.0/SV_Genotyper/1.PSV_signal_cluster.py -d ./ -s 40
+(base) ➜  demo python  PSVGT1.0/PSV_signal/1.PSV_signal_cluster.py -d ./ -s 40
 ************************** chromsomes numer is 5 ***************************
 The Db-Chr3 DEL data (805, 11) after clustering by shift:30 is 805
 The Db-Chr4 DEL data (705, 11) after clustering by shift:30 is 705
@@ -199,7 +199,7 @@ Here is only one sample, so the cluster results will not be changed
 ```
 ## 4. SV Genotyping
 ```sh
-python PSVGT1.0/SV_Genotyper/2.Pop_lrSVGT_V1.py -h
+python PSVGT1.0/PSV_Genotyper/2.Pop_lrSVGT_V1.py -h
 usage: the SVGT for long reads samples [-h] -i SV_INFO [-m MAQ] [-s SHIFT] -mapf MAPF -n ACC -o DIR
 
 options:
@@ -213,7 +213,7 @@ Input file :
   -n ACC      Accession name of the Individual (default: None)
   -o DIR      the output dir (default: None)
 
-python PSVGT1.0/SV_Genotyper/2.Pop_lrSVGT_V1.py -i PopSV_clustered_Record.txt -m 30 -s 100 -mapf 0_tmp_hifi_5.gz.bam -n 5X_hifi -o
+python PSVGT1.0/PSV_Genotyper/2.Pop_lrSVGT_V1.py -i PopSV_clustered_Record.txt -m 30 -s 100 -mapf 0_tmp_hifi_5.gz.bam -n 5X_hifi -o
 
 ## Final Genotype File ##
 cat 2_tmp_5X_hifi_genotype.txt |head                                                                          
