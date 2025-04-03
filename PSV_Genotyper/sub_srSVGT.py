@@ -176,13 +176,13 @@ def calculate_coverage(cut_span, sv_point):
             cov += 1
     return cov
 
-def determine_genotype(entry_ratio):
+def determine_genotype(entry_ratio, homo_rate, ref_rate):
     """
     ONT easy lead to 0/1 and FP, here we try modify.
     """
-    if entry_ratio > 0.65:
+    if entry_ratio  >= homo_rate:
         return "1/1"
-    elif entry_ratio <  0.02:
+    elif entry_ratio <  ref_rate:
         return "0/0"
     else:
         return "0/1"
@@ -245,7 +245,7 @@ def determine_traGT(break_l_ratio, break_r_ratio):
     return genotype
 
 
-def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=100, span_bp=50):
+def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, ref_rate, shift=100, span_bp=50):
     info_return = []
     genotype = "0/0"  # Default genotype
     #sv_start_shift = set(range(sv_s - shift, sv_s + shift+100))
@@ -277,18 +277,7 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=100, 
         ins_ratio = round(count_break_and_Ins / total_map_reads, 3)
         covIns_ratio = round(covIns / total_map_reads, 3)
         
-        def determine_genotype(entry_ratio):
-            """
-            ONT easy lead to 0/1 and FP, here we try modify.
-            """
-            if entry_ratio > 0.65:
-                return "1/1"
-            elif entry_ratio <  0.05:
-                return "0/0"
-            else:
-                return "0/1"
-
-        genotype = determine_genotype(ins_ratio)
+        genotype = determine_genotype(ins_ratio, homo_rate, ref_rate)
         if genotype == "0/1" and effective_spans <= 0.01*total_map_reads+1:
             genotype = "1/1"
         elif genotype == "1/1" and effective_spans >= 0.05*total_map_reads+1:
@@ -303,7 +292,7 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, shift=100, 
         info_return.append(f"total_map_reads={total_map_reads};effective_spans={effective_spans}")
         info_return.append(f"INS_rate={ins_ratio};INS")
     return info_return
-def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, shift=100, span_bp=50):
+def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift=100, span_bp=50):
     ############ SVDel Case ##############
     info_return = []
     genotype = "0/0"  # Default genotype
@@ -355,7 +344,7 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, s
         deles_r_ratio = 0
         covDel_r_ratio = 0
     deles_ratio = max(deles_l_ratio, deles_r_ratio)
-    genotype = determine_genotype(deles_ratio)
+    genotype = determine_genotype(deles_ratio, homo_rate, ref_rate)
     if genotype == "0/1":
         if effective_spans_l + effective_spans_r == 0:
             genotype = "1/1"

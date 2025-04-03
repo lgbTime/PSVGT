@@ -34,7 +34,7 @@ def svsignal(args):
     outSV = "0_tmp_" + basename(sample)
     ref = args.ref
     minimapCMD = construct_minimap2_cmd(args.ref, args.sample, f"{args.outdir}/{outSV}", args.dtype, args.minimapCPU, secondary=False)
-    sort_cmd = f"samtools sort {args.outdir}/{outSV}.sam -@ {args.minimapCPU} -o {args.outdir}/{outSV}.bam && samtools index {args.outdir}/{outSV}.bam && rm {args.outdir}/{outSV}.sam"
+    sort_cmd = f"samtools sort {args.outdir}/{outSV}.sam -@ {args.minimapCPU} -o {args.outdir}/{outSV}.bam && samtools index {args.outdir}/{outSV}.bam -@ {args.minimapCPU} && rm {args.outdir}/{outSV}.sam"
     cmd1 = minimapCMD + "&&" + sort_cmd
     print(cmd1)
     run_command(cmd1)

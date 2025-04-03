@@ -273,7 +273,7 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, 
         if genotype == "1/1":
             if floor(0.1*total_map_reads) + 1 <=  effective_span:
                 genotype = "0/1"
-                print(f"***************Correting SVINS {chrom}:{sv_s}-{sv_e} genotype to 0/1 since it has {effective_span} span reads*****************")
+                print(f"***************Correting SVINS {chrome}:{sv_s}-{sv_e} genotype to 0/1 since it has {effective_span} span reads*****************")
         print(f"INS\t{genotype}\t{sampleID}\ttotal_mapped_reads:{total_map_reads}\tIns_ratio:{ins_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
         info_return.append(genotype)
         info_return.append(f"total_map_reads={total_map_reads},maq={maq}")
