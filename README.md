@@ -88,7 +88,7 @@ For specific sequence types, PSVGT uses a coordinated mapping strategy and progr
 - `-sr`: the samples in test_sr folder should be short reads paired data.
 
 
-## Step by Step PSVGT from aready mapped BAM file
+## Step by Step PSVGT from pre-align BAM file
 ### demo data
 ```sh
 (base) ➜  demo ls
@@ -227,7 +227,7 @@ Input file :
 
 python PSVGT1.0/PSV_Genotyper/2.Pop_lrSVGT_V1.py -i PopSV_clustered_Record.txt -m 30 -s 100 -mapf 0_tmp_hifi_5.gz.bam -n 5X_hifi -o
 
-## Final Genotype File ##
+## Final Genotype Table ##
 cat 2_tmp_5X_hifi_genotype.txt |head                                                                          
 #Target_name	Target_start	Target_end	Target_size	Query_size	5X_hifi	Total_Map_Reads	SV_support
 Db-Chr1	10191632	10191633	-172	172	1/1	total_map_reads=8	INS_rate=1.0;INS
@@ -235,6 +235,25 @@ Db-Chr1	10075481	10075482	-4035	4035	1/1	total_map_reads=3	INS_rate=1.0;INS
 Db-Chr1	10116536	10116537	-79	79	1/1	total_map_reads=7	INS_rate=1.0;INS
 ```
 
+## PSVGT on genome assemblies datasets ##
+### haploid assembly
+```
+## the pre-aligned and indexed file of genome should be in folder genome_bam 
+python PSVGT1.0/PSVGT1.0.py -cr genome_bam -r ref.fa -msv yes -m 50 -o outfolder 
+```
+### diploid assemblies
+```
+cat diploid.info 
+HG00171_clr_hap1.fasta.bam	HG00171_clr_hap2.fasta.bam	HG00171_clr
+# two haplotype mapped bams or fastas file should be in genome_bam folder
+python PSVGT1.0/PSVGT1.0.py -cr genome_bam -r ref.fa -msv yes -m 50 -o outfolder --diploid diploid.info
+```
+### polyploid assemblies ###
+```
+cat polyploid.info
+C_hap1_genome.fasta.sorted.bam	C_hap2_genome.fasta.sorted.bam	C_hap3_genome.fasta.sorted.bam	C_hap4_genome.fasta.sorted.bam	Eig
+python PSVGT1.0.py -cr genome_bam -r ref.fa -msv no -m 50 -o outfolder --polyploid polyploid.info
+```
 
 ## 🧬 PSVGT ToolKits Commands
 ### A more detail usage will be updated sooner or later
