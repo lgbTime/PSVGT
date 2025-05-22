@@ -42,7 +42,7 @@ def mode_or_median(series, lower_percentile=0.25, upper_percentile=0.75):
         valid_stats = [s for s in stats if not pd.isna(s)]
         return ceil(mean_value)
 
-def candidate_sv(clusdf, opened_bam, nreads, support_rate=0.1,add=1):
+def candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate=0.1,add=1):
     """
     Solve clusters dataframe
     Get each cluster's sv breakpoints, SV length
@@ -52,7 +52,8 @@ def candidate_sv(clusdf, opened_bam, nreads, support_rate=0.1,add=1):
     sv_chrom = clusdf['#Target_name'].iloc[0]
     svtype = clusdf['SVType'].iloc[0]
     clus = []
-    cluster_counts = clusdf[cluster_col].value_counts()
+    cluster_counts = clusdf[cluster_col].value_counts() ## default reversed count
+    min_clusters = min(num_hap, len(cluster_counts))
     max_count = cluster_counts.max()
     proportion = max_count / len(clusdf)
     if proportion < 0.05:
@@ -60,8 +61,11 @@ def candidate_sv(clusdf, opened_bam, nreads, support_rate=0.1,add=1):
         return []
     else: 
         print(f"top1 cluster percent is {proportion}")
+    
+    top_clusters = cluster_counts.head(min_clusters).index
+    clusdf = clusdf[clusdf[cluster_col].isin(top_clusters)]
     clusters_to_process =  clusdf[cluster_col].unique()
-    print(f'cluster to process: {clusters_to_process}')
+
     msv = []
     for clu in clusters_to_process:
         clu_df = clusdf[clusdf[cluster_col] == clu]
@@ -85,13 +89,18 @@ def candidate_sv(clusdf, opened_bam, nreads, support_rate=0.1,add=1):
             print(f"{svid} sv signal propertion support")
             clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
             msv.append(svid)
-        if sv_len > 2000 and svtype=="INS" and sv_eye >= 2 and sv_eye > min([start_local_map,end_local_map])*support_rate*0.5: ## to capture big INS
+        if sv_len > 2000 and svtype=="INS" and sv_eye >= 2 and sv_eye >= min([start_local_map,end_local_map])*support_rate*0.5: ## to capture big INS
             if [sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname] not in clus:
                 print(f"{sv_eye} reads support {svid} big INS,local_map is {min([start_local_map,end_local_map])} ")
                 clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
                 msv.append(svid)
-        if sv_eye < nreads -1: ## filter 
-            print(f"{svid}: number sv reads lower than 10 perfect local mapping")
+        if sv_eye >= nreads -1: ## filter 
+            if [sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname] not in clus:
+                print(f"{sv_eye} reads support {svid},local coverage is {min([start_local_map,end_local_map])} ")
+                clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
+                msv.append(svid)
+            else:
+                print(f"{svid}: number sv reads lower than required")
     if len(set(msv)) >= 2:
         outmsv = "\t".join(list(set(msv)))
         print(f'msv:\t{outmsv}')
@@ -216,7 +225,7 @@ def onedepth_all_clus(all_signal,svtype, opened_bam, nrate=0.25):
         print(f'msv:\t{outmsv}')
     return clus
 
-def lowdepth_clu(clusdf, svtype, opened_bam, nreads, support_rate=0.1, add=1):
+def lowdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, support_rate=0.1, add=1):
     """
     Process low-depth cluster data.
     Strict condition for clustering.
@@ -229,11 +238,12 @@ def lowdepth_clu(clusdf, svtype, opened_bam, nreads, support_rate=0.1, add=1):
         max_diff_func= max_diff_func4DEL    
 
     clusdf = klook_clusters(clusdf, max_diff_func, (0.8, 1.2))
-    print(clusdf.drop(columns=['seq']))
-    candisv = candidate_sv(clusdf, opened_bam, nreads, support_rate, add)
+    print(clusdf[['#Target_name','Target_start','Target_end','SVlen','shift_cluster']])
+
+    candisv = candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate, add)
     return candisv
 
-def highdepth_clu(clusdf, svtype, opened_bam, nreads, support_rate=0.1, add=2):
+def highdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, support_rate=0.1, add=2):
     """
     Process high-depth cluster data.
     """
@@ -245,8 +255,8 @@ def highdepth_clu(clusdf, svtype, opened_bam, nreads, support_rate=0.1, add=2):
         max_diff_func= max_diff_func4DEL
     
     clusdf = klook_clusters(clusdf, max_diff_func, (0.8, 1.2))
-    print(clusdf.drop(columns=['seq']))
-    candisv = candidate_sv(clusdf, opened_bam, nreads, support_rate, add)
+    print(clusdf[['#Target_name','Target_start','Target_end','SVlen','shift_cluster']])
+    candisv = candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate, add)
     return candisv
 
 def merge_and_sort(clusdf):
@@ -256,7 +266,7 @@ def merge_and_sort(clusdf):
     """
     clusdf = clusdf.copy()
     clusdf.drop_duplicates( subset=["Query_name", "Target_start", "Target_end"], keep="first",inplace=True) ## we dont keep the same reads multiple segment
-    print(clusdf)
+    print(clusdf[["#Target_name","Target_start","Target_end","SVlen","SVType"]])
     clusdf.sort_values(by=['Target_start', 'SVlen'], inplace=True)
     merged_sv = clusdf.groupby('Query_name').agg({
         '#Target_name': 'first',
@@ -577,9 +587,9 @@ def process_svtype(args, sv_data, chroms, svtype, depth, nreads, minLen):
                                 hdepth = 10
                             for sv_window in sv_windows.values():
                                 if len(sv_window['Query_name']) > hdepth: 
-                                    candisv = highdepth_clu(sv_window, svtype, opened_bam, nreads, args.rate_depth, 1)
+                                    candisv = highdepth_clu(sv_window,args.num_hap, svtype, opened_bam, nreads, args.rate_depth, 1)
                                 else:
-                                    candisv = lowdepth_clu(sv_window, svtype, opened_bam, nreads, args.rate_depth, 1)
+                                    candisv = lowdepth_clu(sv_window, args.num_hap, svtype, opened_bam, nreads, args.rate_depth, 1)
                                 candidate_svs.extend(candisv)
                             return candidate_svs
 
@@ -688,7 +698,7 @@ if __name__ == "__main__":
     IN.add_argument("--nreads", dest="nreads", type=int, help="the minimum numbers of reads to support SV, if not provided, we use average_depth / 10 as threshold" )
     IN.add_argument("--rate_depth", dest="rate_depth", type=float, default=0.1, help="the sv supports of local depth ratio to support sv, 0.1 means the percent of local reads shoule support sv")
     IN.add_argument("--window", dest="window_size", type=int, default=500, help="the window size of signal to parse in klook cluster, 500bp suggested")
-    
+    IN.add_argument("--num_hap", dest="num_hap", type=int, default=2, help="numbers of haplotypes within local region should be defined by species ploid, 2 for diploid, 4 for Tetraploid")
     args = parser.parse_args()
     start_t = time()
     tra_clus, del_clus, ins_clus, inv_clus, dup_clus = candidateSV(args)

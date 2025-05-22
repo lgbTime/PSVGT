@@ -137,9 +137,9 @@ if __name__ == "__main__":
     parser.add_argument("-p",  "--popInDel",default="no", help= "using the primer3 to design the primer for each SVInDel")
     parser.add_argument("-b",  "--breaker",default="no", help= "using the break points info to support the SVInDel Genotyping, this will perform bwa mapping process and breakpoints genotype")
     parser.add_argument("-maq",  "--maq",default=1,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
-    parser.add_argument("-csv",  "--csv",default=0.20, type=float, help= "the percent of reads that support a candidate SV (0.25 means at a depth 20X region, a SV signal should have at least 4 reads support, this parameter is for the variaty depth of hifi/ont/pb samples")
+    parser.add_argument("-csv",  "--csv",default=0.15, type=float, help= "the percent of reads that support a candidate SV (0.15 means at a depth 20X region, a SV signal should have at least 3 reads support, this parameter is for the variaty depth of hifi/ont/pb samples")
     parser.add_argument("-nreads",  "--nreads", type=int, help= "the number of reads to support a candidate SV (SV signal should have at least numbers reads support, this parameter is for the various depth of hifi/ont/pb samples")
-
+    parser.add_argument("--num_hap", "--num_hap", default=2, type=int, help="numbers of haplotypes within local region should be defined by species ploid, 2 for diploid, 4 for Tetraploid")
     parser.add_argument("-msv","--msv_mode",default="no", help= "In msv mode signals of INS,DEL,INV,DUP,TRA will captured from ont/hifi/pb, while for assemble contig from short reads or genome lelve samples we detect SVInDel Only. If no hifi or ont or pacbio data is provided, please setting -msv no, PSVGT will detect SVInDel Only")
     parser.add_argument("-lr_homo_rate", dest="lr_homo_rate",default=0.75, type=float, help="to determine a homozygous site, if 0.75 of the local mapping signal suport the sv the genotyoe will be 1/1, for species like polyploid potato we suggest 0.8")
     parser.add_argument("-lr_ref_rate", dest="lr_ref_rate",default=0.10, type=float, help="to determine reference allele, in a 100X data, if suport of local signal less than 0.10, the genotype will be 0/0")
@@ -239,6 +239,7 @@ if __name__ == "__main__":
                         f'--rate_depth {args.csv} --nreads {args.nreads}'
                         f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
                         f'--window {args.window} '
+                        f'--num_hap {args.num_hap} '
                         f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov >{args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
                         for chrom in fai[0]
                     ]
@@ -251,6 +252,7 @@ if __name__ == "__main__":
                         f'--rate_depth {args.csv} '
                         f'--window {args.window} '
                         f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
+                        f'--num_hap {args.num_hap} '
                         f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov > {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
                         for chrom in fai[0]
                     ]
@@ -262,6 +264,7 @@ if __name__ == "__main__":
                         f'--nreads {args.nreads} '
                         f'--window {args.window} '
                         f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
+                        f'--num_hap {args.num_hap} '
                         f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov > {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
                         for chrom in fai[0]
                     ]
@@ -272,6 +275,7 @@ if __name__ == "__main__":
                         f'-dtype {dtype} -s 800 -M {args.max} '
                         f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
                         f'--window {args.window} '
+                        f'--num_hap {args.num_hap} '
                         f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov >{args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
                         for chrom in fai[0]
                     ]
@@ -301,7 +305,7 @@ if __name__ == "__main__":
 
                 clu2fil_cmds = []
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov --window {args.window} {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
+                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov --window {args.window} --num_hap {args.num_hap} {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
                     clu2fil_cmds.append(clu2fil_cmd)
                 pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
                 pool.map(run_clu2fil_cmd, clu2fil_cmds)
@@ -346,7 +350,7 @@ if __name__ == "__main__":
                     continue
                 clu2fil_cmds = []
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov --window {args.window} >{args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.log'
+                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov --window {args.window} --num_hap {args.num_hap} >{args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.log'
                     clu2fil_cmds.append(clu2fil_cmd)
                 pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
                 pool.map(run_clu2fil_cmd, clu2fil_cmds)
@@ -384,6 +388,7 @@ if __name__ == "__main__":
                     f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
                     f'-dtype {dtype} -s 800 -M {args.max} '
                     f'--window {args.window} '
+                    f'--num_hap {args.num_hap} '
                     f'--nreads {args.nreads} --rate_depth {args.csv} '
                     f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov >{args.outdir}/{base_prefix}_{chrom}.record.txt.log'
                 for chrom in fai[0]
@@ -395,6 +400,7 @@ if __name__ == "__main__":
                     f'-dtype {dtype} -s 800 -M {args.max} '
                     f'--rate_depth {args.csv} '
                     f'--window {args.window} '
+                    f'--num_hap {args.num_hap} '
                     f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov >{args.outdir}/{base_prefix}_{chrom}.record.txt.log'
                 for chrom in fai[0]
                 ]
@@ -405,6 +411,7 @@ if __name__ == "__main__":
                     f'-dtype {dtype} -s 800 -M {args.max} '
                     f'--nreads {args.nreads}  '
                     f'--window {args.window} '
+                    f'--num_hap {args.num_hap} '
                     f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov >{args.outdir}/{base_prefix}_{chrom}.record.txt.log'
                 for chrom in fai[0]
                 ]
@@ -414,6 +421,7 @@ if __name__ == "__main__":
                     f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
                     f'-dtype {dtype} -s 800 -M {args.max} '
                     f'--window {args.window} '
+                    f'--num_hap {args.num_hap} '
                     f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov >{args.outdir}/{base_prefix}_{chrom}.record.txt.log'
                 for chrom in fai[0]
                 ]
