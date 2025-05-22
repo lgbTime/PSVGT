@@ -1,13 +1,19 @@
 import argparse
 from os.path import basename
 import pandas as pd
-def svindeltab2vcf(tab, outvcf):
+def svindeltab2vcf(tab, outvcf, fai):
+    header = f"""##fileformat=VCFv4.2
+##source=PSVGT1.0\n"""
+    with open(fai, 'r') as fai:
+        lines = fai.readlines()
+    for line in lines:
+        genome_size = line.strip().split("\t")
+        fline = f"##contig=<ID={genome_size[0]},length={genome_size[1]}>\n"
+        header +=fline
     with open(tab, 'r') as f:
         lines = f.readlines()
     with open(outvcf, 'w') as outf:
-        prehead = f"""##fileformat=VCFv4.2
-##source=PSVGT1.0
-##ALT=<ID=DEL,Description="Deletion">
+        prehead = f"""{header}##ALT=<ID=DEL,Description="Deletion">
 ##ALT=<ID=INS,Description="Insertion">
 ##ALT=<ID=DUP,Description="Duplication">
 ##ALT=<ID=INV,Description="Inversion">
@@ -48,8 +54,9 @@ def main():
     parser = argparse.ArgumentParser(description="Convert SVInDel tab-delimited file to VCF format")
     parser.add_argument('tab', help='Input tab-delimited file with SVInDel information')
     parser.add_argument('outvcf', help='Output VCF file path')
+    parser.add_argument('fai', help='Output genome faidx file path')
     args = parser.parse_args()
-    svindeltab2vcf(args.tab, args.outvcf)
+    svindeltab2vcf(args.tab, args.outvcf,args.fai)
 if __name__ == "__main__":
     main()
 

@@ -121,7 +121,12 @@ if __name__ == "__main__":
     parser.add_argument("-ont", "--ontdir", help="a directory contain nanopore ont reads file or indexed bam files of ont")
     parser.add_argument("-pb", "--pbdir", help="a directory contain PacBio CLR genomic reads files or indexed bam files of pb")
     parser.add_argument("-cr", "--crdir", help="a directory contain the fasta file of assembly contig/chromosome level or indexed bam files of samples ")
-    parser.add_argument("-w", "--max_workers", default = 4,type=int, help="the max workers thread pool excutor, 4 means run for samples at a time")
+    parser.add_argument("-win", "--window",default=500,type=int,help="Window size to parse signal, this parameter is to merge fragment SV due to aligment, default window size is 500bp to merge cluster the SV with a sv_start less than window size")
+    parser.add_argument("-diploid", "--diploid", help="for diploid resolved assembly, to get a phased genotype please provide table list each line in format hap1\thap2\tSampleName in cr directory")
+    parser.add_argument("-polyploid", "--polyploid", help="for polyploid haplotype resolved assembly like potato(4 haplotype assemblies available), to get a merge genotype of samples please provide table list each line in format hap1\thap2\thap3\thapn\tSampleName")
+
+
+    parser.add_argument("-w", "--max_workers", default = 4,type=int, help="the max workers thread pool excutor, 4 means run 4 samples at a time")
     parser.add_argument("-t", "--threads", default = 10, help="the cpu use to assembly contig or bwa mapping")
     parser.add_argument("-minimapCPU", "--minimapCPU", default = 10, help="the cpu in minimap mapping")
     parser.add_argument("-r", "--refGenome", required=True, help="the reference genome ")
@@ -129,15 +134,17 @@ if __name__ == "__main__":
     parser.add_argument("-m",  "--min", default=40, help= "The min length of SV ")
     parser.add_argument("-M",  "--max", default=10000000, help= "The max length of  SV ")
     parser.add_argument("-e",  "--popcaps",default="no", help= "population caps analysis, the caps marker has a maf >= 0.05 will be output, input yes PopCaps will perform the analysis")
-    parser.add_argument("-p",  "--popInDel",default="yes", help= "using the primer3 to design the primer for each SVInDel")
+    parser.add_argument("-p",  "--popInDel",default="no", help= "using the primer3 to design the primer for each SVInDel")
     parser.add_argument("-b",  "--breaker",default="no", help= "using the break points info to support the SVInDel Genotyping, this will perform bwa mapping process and breakpoints genotype")
     parser.add_argument("-maq",  "--maq",default=1,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
-    parser.add_argument("-csv",  "--csv",default=0.25, type=float, help= "the percent of reads that support a candidate SV (0.25 means at a depth 20X region, a SV signal should have at least 5 reads support, this parameter is for the variaty depth of HIFI/ONT/PB samples")
+    parser.add_argument("-csv",  "--csv",default=0.20, type=float, help= "the percent of reads that support a candidate SV (0.25 means at a depth 20X region, a SV signal should have at least 4 reads support, this parameter is for the variaty depth of hifi/ont/pb samples")
+    parser.add_argument("-nreads",  "--nreads", type=int, help= "the number of reads to support a candidate SV (SV signal should have at least numbers reads support, this parameter is for the various depth of hifi/ont/pb samples")
+
     parser.add_argument("-msv","--msv_mode",default="no", help= "In msv mode signals of INS,DEL,INV,DUP,TRA will captured from ont/hifi/pb, while for assemble contig from short reads or genome lelve samples we detect SVInDel Only. If no hifi or ont or pacbio data is provided, please setting -msv no, PSVGT will detect SVInDel Only")
-    parser.add_argument("-lr_homo_rate", dest="lr_homo_rate",default=0.75, type=float, help="to determine a homozygous site, if 0.75 of the local mapping signal suport the sv the genotyoe will be 1/1")
-    parser.add_argument("-lr_ref_rate", dest="lr_ref_rate",default=0.05, type=float, help="to determine reference allele, in a 100X data, if suport of local signal less than 0.05, the genotype will be 0/0")
+    parser.add_argument("-lr_homo_rate", dest="lr_homo_rate",default=0.75, type=float, help="to determine a homozygous site, if 0.75 of the local mapping signal suport the sv the genotyoe will be 1/1, for species like polyploid potato we suggest 0.8")
+    parser.add_argument("-lr_ref_rate", dest="lr_ref_rate",default=0.10, type=float, help="to determine reference allele, in a 100X data, if suport of local signal less than 0.10, the genotype will be 0/0")
     parser.add_argument("-sr_homo_rate", dest="sr_homo_rate",default=0.65, type=float, help="to determine a homozygous site, if 0.65 of the local mapping signal suport the sv the genotyoe will be 1/1, you can lower down the value if your specise have a low heterozygous rate")
-    parser.add_argument("-sr_ref_rate", dest="sr_ref_rate",default=0.05, type=float, help="to determine reference allele, in a 100X data, if suport of local signal less than 5%, the genotype will be 0/0, you can increase the value to filter putative heterozygous SV")
+    parser.add_argument("-sr_ref_rate", dest="sr_ref_rate",default=0.10, type=float, help="to determine reference allele, in a 100X data, if suport of local signal less than 10 percent, the genotype will be 0/0, you can increase the value to filter putative heterozygous SV")
 
     parser.add_argument("-span", dest="span", default=50, type=int, help="heterzygous evdence, a read (maping start - 50) < breakpoint < (mapping end - 50) will be taken as span the breakpoint, for 150 bp reads we suggest 50, for 125bp may be 45 will be better")
 
@@ -223,21 +230,58 @@ if __name__ == "__main__":
             subprocess.run(signal_cmd, shell=True, check=True)
 
             ## chromosome pool run ##
-            with multiprocessing.Pool() as pool:
-                clu2fil_cmds = [
-                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py '
-                    f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
-                    f'-dtype {dtype} -s 800 -M {args.max} '
-                    f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
-                    f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov'
-                    for chrom in fai[0]
-                ]
+            with multiprocessing.Pool(processes=args.max_workers) as pool:
+                if dtype in ['hifi','ont','pb'] and args.csv and args.nreads:
+                    clu2fil_cmds = [
+                        f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                        f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
+                        f'-dtype {dtype} -s 800 -M {args.max} '
+                        f'--rate_depth {args.csv} --nreads {args.nreads}'
+                        f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
+                        f'--window {args.window} '
+                        f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov >{args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
+                        for chrom in fai[0]
+                    ]
+                
+                elif dtype in ['hifi','ont','pb'] and args.csv and not args.nreads:
+                    clu2fil_cmds = [
+                        f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                        f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
+                        f'-dtype {dtype} -s 800 -M {args.max} '
+                        f'--rate_depth {args.csv} '
+                        f'--window {args.window} '
+                        f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
+                        f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov > {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
+                        for chrom in fai[0]
+                    ]
+                elif dtype in ['hifi','ont','pb'] and args.nreads and not args.csv:
+                    clu2fil_cmds = [
+                        f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                        f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
+                        f'-dtype {dtype} -s 800 -M {args.max} '
+                        f'--nreads {args.nreads} '
+                        f'--window {args.window} '
+                        f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
+                        f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov > {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
+                        for chrom in fai[0]
+                    ]
+                else:
+                    clu2fil_cmds = [
+                        f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                        f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
+                        f'-dtype {dtype} -s 800 -M {args.max} '
+                        f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
+                        f'--window {args.window} '
+                        f'--cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov >{args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
+                        for chrom in fai[0]
+                    ]
+
                 pool.map(run_clu2fil_cmd, clu2fil_cmds)
             ## ACC SV ##
             ACC_SV_cmd = (
                 f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py '
                 f'-preffix {args.outdir}/0_tmp_{basename(contig)} '
-                f'-fai {args.refGenome}.fai'
+                f'-fai {args.refGenome}.fai -M {args.max} --nrate {args.csv}'
             )
             subprocess.run(ACC_SV_cmd, shell=True, check=True)
         except subprocess.CalledProcessError as e:
@@ -257,14 +301,14 @@ if __name__ == "__main__":
 
                 clu2fil_cmds = []
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov'
+                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov --window {args.window} {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
                     clu2fil_cmds.append(clu2fil_cmd)
                 pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
                 pool.map(run_clu2fil_cmd, clu2fil_cmds)
                 pool.close()
                 pool.join()
 
-                ACC_SV_cmd = f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/0_tmp_{basename(contig)} -fai  {args.refGenome}.fai'
+                ACC_SV_cmd = f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/0_tmp_{basename(contig)} -fai  {args.refGenome}.fai --nrate {args.csv}'
                 try:
                     subprocess.run(ACC_SV_cmd, shell=True, check=True)
                 except subprocess.CalledProcessError as e:
@@ -302,14 +346,14 @@ if __name__ == "__main__":
                     continue
                 clu2fil_cmds = []
                 for chrom in fai[0]:
-                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov'
+                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov --window {args.window} >{args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.log'
                     clu2fil_cmds.append(clu2fil_cmd)
                 pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
                 pool.map(run_clu2fil_cmd, clu2fil_cmds)
                 pool.close()
                 pool.join()
 
-                ACC_SV_cmd = f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/{basename(bam).replace(".bam", "")} -fai  {args.refGenome}.fai'
+                ACC_SV_cmd = f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/{basename(bam).replace(".bam", "")} -fai  {args.refGenome}.fai --nrate {args.csv}'
                 try:
                     subprocess.run(ACC_SV_cmd, shell=True, check=True)
                 except subprocess.CalledProcessError as e:
@@ -334,13 +378,46 @@ if __name__ == "__main__":
 
             # Phase 2: parafly chrs
             base_prefix = basename(bam).replace(".bam", "")
-            chrom_commands = [
-                f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthPASS.py '
-                f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
-                f'-dtype {dtype} -s 800 -M {args.max} '
-                f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov'
+            if args.nreads and args.csv and dtype in ['hifi', 'ont', 'pb']:
+                chrom_commands = [
+                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                    f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
+                    f'-dtype {dtype} -s 800 -M {args.max} '
+                    f'--window {args.window} '
+                    f'--nreads {args.nreads} --rate_depth {args.csv} '
+                    f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov >{args.outdir}/{base_prefix}_{chrom}.record.txt.log'
                 for chrom in fai[0]
-            ]
+                ]
+            elif args.csv and dtype in ['hifi', 'ont', 'pb'] and not args.nreads:
+                chrom_commands = [
+                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                    f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
+                    f'-dtype {dtype} -s 800 -M {args.max} '
+                    f'--rate_depth {args.csv} '
+                    f'--window {args.window} '
+                    f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov >{args.outdir}/{base_prefix}_{chrom}.record.txt.log'
+                for chrom in fai[0]
+                ]
+            elif args.nreads and dtype in ['hifi', 'ont', 'pb'] and not args.csv:
+                chrom_commands = [
+                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                    f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
+                    f'-dtype {dtype} -s 800 -M {args.max} '
+                    f'--nreads {args.nreads}  '
+                    f'--window {args.window} '
+                    f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov >{args.outdir}/{base_prefix}_{chrom}.record.txt.log'
+                for chrom in fai[0]
+                ]
+            else:
+                chrom_commands = [
+                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                    f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
+                    f'-dtype {dtype} -s 800 -M {args.max} '
+                    f'--window {args.window} '
+                    f'--b {bam} --cov {args.outdir}/{base_prefix}_{chrom}.record.txt.cov >{args.outdir}/{base_prefix}_{chrom}.record.txt.log'
+                for chrom in fai[0]
+                ]
+
 
             # dynamic cpu
             with multiprocessing.Pool(processes=min(len(fai[0]), os.cpu_count()//5)) as pool:
@@ -350,7 +427,7 @@ if __name__ == "__main__":
             ACC_SV_cmd = (
                 f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py '
                 f'-preffix {args.outdir}/{base_prefix} '
-                f'-fai {args.refGenome}.fai'
+                f'-fai {args.refGenome}.fai --nrate {args.csv}'
             )
             subprocess.run(ACC_SV_cmd, shell=True, check=True)
 
@@ -424,7 +501,7 @@ if __name__ == "__main__":
             print(if_done_name)
             acc_name = basename(mapinfo_file).replace('.bam', '').replace('0_tmp_', '')
 
-            cmd = f"python {PSVGT}/PSV_Genotyper/2.Pop_lrSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {mapinfo_file} -m {args.maq} -lr_homo_rate {args.lr_homo_rate} -lr_ref_rate {args.lr_ref_rate}  -n {acc_name} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {if_done_name} {if_done_name.replace('.txt', '')}.vcf"
+            cmd = f"python {PSVGT}/PSV_Genotyper/2.Pop_lrSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {mapinfo_file} -m {args.maq} -lr_homo_rate {args.lr_homo_rate} -lr_ref_rate {args.lr_ref_rate}  -n {acc_name} -o {args.outdir} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {if_done_name} {if_done_name.replace('.txt', '')}.vcf {args.refGenome}.fai"
             print(cmd)
             gt_cmds.append(cmd)
     if len(gt_cmds) >0:
@@ -447,14 +524,52 @@ if __name__ == "__main__":
                         print(f'An error occurred: {e}', file=longseq_gt_log)
     else:
         print(f"all samples has been genotype before, if you want to repeat genotype please remove the 2_tmp_XXX_genotype.txt files in the {args.outdir}")
-    
+
+    ###################### haplotype resoved assembly genotype phased ###################
+    if args.diploid:
+        print("*************** diploid calling **************")
+        with open(args.diploid, 'r') as f:
+            lines = f.readlines()
+        for hh in lines:
+            h1 = hh.strip().split("\t")[0]
+            h1 = "2_tmp_" + h1.replace(".bam", "") + "_genotype.txt" if  h1[-4:] == ".bam" else "2_tmp_" + h1 + "_genotype.txt"
+            h2 = hh.strip().split("\t")[1]
+            h2 = "2_tmp_" + h2.replace(".bam", "") + "_genotype.txt" if  h2[-4:] == ".bam" else "2_tmp_" + h2 + "_genotype.txt"
+            samplename =  hh.strip().split("\t")[2]
+            phased_cmd = f'python {PSVGT}/PSV_Genotyper/phased_diploid_asm.py {args.outdir}/{h1} {args.outdir}/{h2} {args.outdir}/2_tmp_{samplename}_genotype.txt'
+            print(f"***************** try to phased hap1: {args.outdir}/{h1} and hap2: {args.outdir}/{h2} to {args.outdir}/2_tmp_{samplename}_genotype.txt ******************")
+            tab2vcf =    f'python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{samplename}_genotype.txt {args.outdir}/2_tmp_{samplename}_genotype.vcf {args.refGenome}.fai'
+            run_command(phased_cmd)
+            run_command(tab2vcf)
+    if args.polyploid:
+        print("*************** polyploid genotype merging **************")
+        with open(args.polyploid, 'r') as f:
+            lines = f.readlines()
+        path_haps = ""
+        for hh in lines:
+            path_haps = ""
+            haps = hh.strip().split("\t")
+            total_haps = len(haps) - 1
+            samplename = haps[-1]
+            for i in range(total_haps):
+                hap = haps[i] 
+                hap_file = "2_tmp_" + hap.replace(".bam", "") + "_genotype.txt" if  hap[-4:] == ".bam" else "2_tmp_" + hap + "_genotype.txt"
+                path_haps += f'{args.outdir}/{hap_file} '
+            print(f"*************************** phased polyploid {samplename} ***************************** ")
+            phased_cmd = f'python {PSVGT}/PSV_Genotyper/phased_polyploid_genome_gt.py {path_haps} {args.outdir}/2_tmp_{samplename}_genotype.txt'
+            print(f'********************** phased polyploid ************************\n{phased_cmd}')
+            vcf_cmd = f'python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{samplename}_genotype.txt {args.outdir}/2_tmp_{samplename}_genotype.vcf {args.refGenome}.fai'
+            run_command(phased_cmd)
+            run_command(vcf_cmd)
+
+
     ###################### calling illumina breaker #########################
     if args.breaker == "yes":
         breaker_gt_cmds = []
         bams = file_capture(f"00_bwa_mem_out", ".bam")
         for bam in bams:
             sampleID = basename(bam)[:-4]
-            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {bam} -m {args.maq} -span {args.span} -s 50 -n {sampleID} -o {args.outdir} -sr_homo_rate {args.sr_homo_rate} -sr_ref_rate {args.sr_ref_rate} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf"
+            bpgt_cmd =  f"python {PSVGT}/PSV_Genotyper/2.Pop_srSVGT_V1.py -i {args.outdir}/PopSV_Candidate_Record.txt -mapf {bam} -maq {args.maq} -span {args.span} -s 50 -n {sampleID} -o {args.outdir} -homo_rate {args.sr_homo_rate} -ref_rate {args.sr_ref_rate} && python {PSVGT}/PSV_Genotyper/SVGT_tab2vcf.py {args.outdir}/2_tmp_{sampleID}_bpgenotype.txt {args.outdir}/2_tmp_{sampleID}_bpgenotype.vcf {args.refGenome}.fai"
             print(bpgt_cmd)
             breaker_gt_cmds.append(bpgt_cmd)
         with open("gt_sv_by_bwa_bam_log.txt", 'w') as sr_bpgt_log:
@@ -468,8 +583,8 @@ if __name__ == "__main__":
     print(merge_cmd)
     run_command(merge_cmd)
     if args.popInDel == "yes":
-        run_command(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} --min 50 --max 500 --frank 500 --maf 0.01 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
-        print(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} 50 500 500 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
+        run_command(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} --min 80 --max 600 --frank 400 --maf 0.01 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
+        print(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} 80 600 400 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
     ###################### Annotaion SVInDel For  Population #########################
     final_gt = f"{args.outdir}/PSVGT_all.vcf2.SVInDel"
     if args.gff:

@@ -106,7 +106,6 @@ def tra_clu(tradf,  max_diff=800):
          })
     return clu
 
-import pandas as pd
 
 def drop_ins_from_dup(df):
     ins = df[df['SVType'].isin(['INS', 'DUP'])]
@@ -147,22 +146,44 @@ def read_file(file_name):
         return None
 
 def candidateSV(args):
-    from os.path import basename
+    from os.path import basename, exists
     import pandas as pd
     chrs = pd.read_csv(args.fai,sep="\t",index_col=None,header=None)[0].tolist()
     file_lists = []
     for sv in ['INS', 'DEL', 'TRA', 'DUP','INV']:
         for chrom in chrs:
-            file_name = f"{args.preffix}_{chrom}.record.txt_{sv}.signal"  
-            file_lists.append(file_name)
+            file_name = f"{args.preffix}_{chrom}.record.txt_{sv}.signal"
+            if exists(file_name):
+                file_lists.append(file_name)
+    print(file_lists)
+
     sv = read_file(file_lists[0])
+    if args.nreads_nrate:
+        sv = sv[(sv["cluster_size"] >= args.nreads) & (sv["sv_rate"] >= args.nrate)]
+    else:
+        if args.nrate and not args.nreads:
+            sv = sv[sv["sv_rate"] >= args.nrate]
+        elif args.nreads and not args.nrate:
+            sv = sv[sv["sv_nreads"] >= args.nreads]
+        elif args.nreads and args.nrate:
+            sv = sv[(sv["sv_rate"] >= args.nrate) | (sv["sv_nreads"] >= args.nreads)]
+
     for file_name in file_lists[1:]:
         svi = read_file(file_name)
         sv = pd.concat([sv,svi],axis=0)
+    if args.nreads_nrate:
+        sv = sv[(sv["cluster_size"] >= args.nreads) & (sv["sv_rate"] >= args.nrate)]
+    else:
+        if args.nrate and not args.nreads:
+            sv = sv[sv["sv_rate"] >= args.nrate]
+        elif args.nreads and not args.nrate:
+            sv = sv[sv["sv_nreads"] >= args.nreads]
+        elif args.nreads and args.nrate:
+            sv = sv[(sv["sv_rate"] >= args.nrate) | (sv["sv_nreads"] >= args.nreads)]
+
     ori = sv.shape
     sv_types = sv["SVType"].unique()
     ori = sv.shape
-
     sv_types = sv["SVType"].unique()
     sv.sort_values(by=["#Target_name","Target_start","SVlen","SVID"], inplace=True)
     def process_chromosome(chrom):
@@ -216,6 +237,9 @@ if __name__ == "__main__":
     IN.add_argument("-fai", dest="fai",required=True, help="the reference faidx file")
     IN.add_argument("-s", dest="shift", default=100, type=int, help="the distance of shifting the breakpoints ")
     IN.add_argument("-M", dest="max", default=6868886, type=int, help="the max SV length ")
+    IN.add_argument("--nreads", dest="nreads", type=int, help="filter signal by minimum support reads")
+    IN.add_argument("--nrate", dest="nrate",   type=float, help="filter signal by minimum ratio of signal")
+    IN.add_argument("--nn", dest="nreads_nrate",action="store_true", help="strict filter for signal use both meet threshold of nreads and nrate, if not --nn, keep SV meet nreads or nrate")
     args = parser.parse_args()
     start_t = time()
     candidateSV(args)

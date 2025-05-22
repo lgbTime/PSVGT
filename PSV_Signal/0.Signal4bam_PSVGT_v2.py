@@ -3,6 +3,8 @@ from time import time
 import pandas as pd
 from multiprocessing import Pool
 import sub_Signal4bam_PSVGT
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser("SV signal extract from sam file", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     IN = parser.add_argument_group("Signal Capture")
@@ -17,22 +19,24 @@ def parse_arguments():
     IN.add_argument("-w", dest="workers", help="Number of worker processes", default=10, type=int)
     return parser.parse_args()
 
+
 def main():
     args = parse_arguments()
     # Load chromosome list from the fai file
-    fai = pd.read_csv(args.fai, header=None, sep="\t",dtype=str, index_col=None)
-    chromosome_list =  fai[0].tolist()
+    fai = pd.read_csv(args.fai, header=None, sep="\t", dtype=str, index_col=None)
+    chromosome_list = fai[0].tolist()
     chrom_size_dict = dict(zip(fai[0], fai[1].astype(int)))
     if args.out[-4:] == ".bam":
         args.out = args.out.replace('.bam', '')
     SVsignal_out_path = f"{args.out}"
     # Use multiprocessing to parallelize the chromosome processing
     with Pool(processes=args.workers) as pool:
-        pool.starmap(sub_Signal4bam_PSVGT.process_chromosome, 
-                     [(chromosome,chrom_size_dict[chromosome],chromosome_list, args.bam, args.min,args.max, args.maq, SVsignal_out_path,args.dtype,args.msv) 
+        pool.starmap(sub_Signal4bam_PSVGT.process_chromosome,
+                     [(chromosome, chrom_size_dict[chromosome], chromosome_list, args.bam, args.min, args.max, args.maq, SVsignal_out_path, args.dtype, args.msv)
                       for chromosome in chromosome_list])
     exe_end = time()
     print(f"{'*' * 40} done SV searching {'*' * 40}\ncost time: {exe_end - exe_start}")
+
 
 if __name__ == "__main__":
     exe_start = time()

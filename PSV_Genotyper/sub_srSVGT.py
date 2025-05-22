@@ -282,9 +282,9 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, 
             genotype = "1/1"
         elif genotype == "1/1" and effective_spans >= 0.05*total_map_reads+1:
             genotype = "0/1"
-        elif genotype == "0/0":
-            if effective_spans == 0:
-                genotype = "1/1"
+        #elif genotype == "0/0":
+        #    if effective_spans == 0:
+        #        genotype = "1/1"
             #else:
             #    genotype = "0/1"
         print(f"INS\t{genotype}\t{sampleID}\ttotal_mapped_reads:{total_map_reads}\tIns_ratio:{ins_ratio}\tIns_points_covered_ratio:{covIns_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
@@ -310,7 +310,7 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, h
     if total_map_reads == 0:
         info_return.append("1/1") ## no reads properly dele
         info_return.append(f"total_map_reads_l=0;total_map_reads_r=0")
-        info_return.append(f"deles_l_ratio=0;deles_r_ratio=0")
+        info_return.append(f"deles_l_ratio=0,deles_r_ratio=0;DEL")
         return info_return
     if deles_l:  # Check if there are deletion entries ####### if there are deles but not the target deles
         for pos in deles_l.keys():

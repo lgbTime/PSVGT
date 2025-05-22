@@ -3,7 +3,7 @@ import subprocess
 from multiprocessing import Pool
 import os
 from tqdm import tqdm
-from sub_lr_SVGT import delGT, insGT, dupGT, supp_dupGT, traGT,breaks2traGT, invGT, breaks2invGT, little_dupGT
+from sub_lr_SVGT_force import delGT, insGT, dupGT, supp_dupGT, traGT,breaks2traGT, invGT, breaks2invGT, little_dupGT
 import pandas as pd
 import pysam
 from math import ceil
@@ -16,7 +16,7 @@ def makedir(path):
 def run_command(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
-def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=200,minfilt=35):
+def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=100):
     sampleID = name
     info = sv_line.strip().split("\t")
     if "DEL" in info[5]:
@@ -25,7 +25,7 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
         left_most = max(sv_s - shift, 0)
         left_sam = opened_sam.fetch(reference=chrome, start=left_most, end=sv_s + shift)
         right_sam = opened_sam.fetch(reference=chrome, start=sv_e - shift, end=sv_e + shift)
-        genotype = delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift,minfilt)
+        genotype = delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift=200)
         out = [chrome, sv_s, sv_e, sv_size, -sv_size]
         return "\t".join(map(str, out + genotype))
 
@@ -36,7 +36,7 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
         sv_size = int(info[3])
         left_most = max(sv_s - shift, 0)
         region_sam = opened_sam.fetch(reference=chrome, start=left_most, end=sv_e + shift)
-        genotype = insGT(sampleID, region_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift, minfilt)
+        genotype = insGT(sampleID, region_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift=200)
         out = [chrome, sv_s, sv_e, -sv_size, sv_size]
         return "\t".join(map(str, out + genotype))
 
@@ -92,18 +92,18 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
 
 
 def process_chromosome(args):
-    chromosome_lines, mapf, name, min_maq, homo_rate, ref_rate, shift,minsv = args
+    chromosome_lines, mapf, name, min_maq, homo_rate, ref_rate, shift = args
     opened_sam = pysam.AlignmentFile(mapf, "rb")
     chromosome_output = []
     for line in chromosome_lines:
-        result = process_sv(line, opened_sam, name, min_maq, homo_rate, ref_rate, shift, minsv)
+        result = process_sv(line, opened_sam, name, min_maq, homo_rate, ref_rate, shift)
         if result:
             chromosome_output.append(result)
     opened_sam.close()
     return chromosome_output
 
 
-def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, homo_rate, ref_rate, shift, workers,minsv):
+def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, homo_rate, ref_rate, shift, workers):
     header_line = f"#Target_name\tTarget_start\tTarget_end\tTarget_size\tQuery_size\t{name}\tTotal_Map_Reads\tSV_support"
     with open(supp_sv_table, "r") as svf:
         sv_lines = svf.readlines()
@@ -118,7 +118,7 @@ def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, homo_rate, ref_rate,
 
     output_lines = []
     with Pool(processes=workers) as pool:
-        args_list = [(lines, mapf, name, min_maq, homo_rate, ref_rate, shift,minsv) for _, lines in chromosome_groups.items()]
+        args_list = [(lines, mapf, name, min_maq, homo_rate, ref_rate, shift) for _, lines in chromosome_groups.items()]
         results = list(tqdm(pool.imap(process_chromosome, args_list), total=len(args_list)))
         for result in results:
             output_lines.extend(result)
@@ -144,9 +144,8 @@ if __name__ == "__main__":
     IN.add_argument("-n", dest="ACC", required=True, help="Accession name of the Individual")
     IN.add_argument("-o", dest="dir", required=True, help="the output dir")
     IN.add_argument("-w", dest="workers", help="Number of worker processes", default=5, type=int)
-    IN.add_argument("-minsv",dest="minsv",help="the minimum size of sv filter in GT", default=35,type=int)
     args = parser.parse_args()
     start_t = time()
-    svGenotyper(args.sv_info, args.mapf, args.ACC, args.dir, args.maq, args.lr_homo_rate, args.lr_ref_rate, args.shift, args.workers, args.minsv)
+    svGenotyper(args.sv_info, args.mapf, args.ACC, args.dir, args.maq, args.lr_homo_rate, args.lr_ref_rate, args.shift, args.workers)
     end_t = time()
     print(f"******************* Cost time {end_t - start_t}s *********************")

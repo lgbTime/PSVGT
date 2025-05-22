@@ -62,11 +62,10 @@ def candidate_sv(clusdf, opened_bam, nreads, support_rate=0.1,add=1):
         print(f"top1 cluster percent is {proportion}")
     clusters_to_process =  clusdf[cluster_col].unique()
     print(f'cluster to process: {clusters_to_process}')
+    msv = []
     for clu in clusters_to_process:
         clu_df = clusdf[clusdf[cluster_col] == clu]
         reads_total = clu_df['Query_name'].unique()
-        if len(reads_total) < 2:
-            continue
         sv_start = mode_or_median(clu_df['Target_start'])
         sv_len = mode_or_median(clu_df['SVlen'])
         sv_end = mode_or_median(clu_df['Target_end'])
@@ -75,6 +74,8 @@ def candidate_sv(clusdf, opened_bam, nreads, support_rate=0.1,add=1):
         svid = f'{sv_chrom}:{sv_start}-{sv_end}_{svtype}={sv_len}'
         print(svid)
         sv_eye = len(readsname)
+        if sv_eye < 2:
+            continue
         start_local_map = local_cov(opened_bam, sv_chrom, max(0, sv_start - 150), max(sv_start - 100, 0))
         end_local_map = local_cov(opened_bam, sv_chrom, sv_end + 100, sv_end + 150)
 
@@ -83,66 +84,52 @@ def candidate_sv(clusdf, opened_bam, nreads, support_rate=0.1,add=1):
         if sv_eye >= min([start_local_map,end_local_map])*support_rate + add:
             print(f"{svid} sv signal propertion support")
             clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
+            msv.append(svid)
         if sv_len > 2000 and svtype=="INS" and sv_eye >= 2 and sv_eye > min([start_local_map,end_local_map])*support_rate*0.5: ## to capture big INS
             if [sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname] not in clus:
                 print(f"{sv_eye} reads support {svid} big INS,local_map is {min([start_local_map,end_local_map])} ")
                 clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
+                msv.append(svid)
         if sv_eye < nreads -1: ## filter 
             print(f"{svid}: number sv reads lower than 10 perfect local mapping")
-    if len(clus) >= 2:
-        print(f'!!!!!!!!! found multiple allele !!!!!!!!! ---> {clus}')
-    print(clus)
+    if len(set(msv)) >= 2:
+        outmsv = "\t".join(list(set(msv)))
+        print(f'msv:\t{outmsv}')
     return clus
-
-def merge_and_sort(clusdf):
-    """
-    Merge and sort the cluster dataframe based on specific columns.
-    if two signal is from same reads, signals in window will be summed.
-    """
-    clusdf = clusdf.copy()
-    clusdf.sort_values(by=['Target_start', 'SVlen'], inplace=True)
-    merged_sv = clusdf.groupby('Query_name').agg({
-        '#Target_name': 'first',
-        'Target_start': 'first',
-        'Target_end': 'first',
-        'SVlen': 'sum',
-        'SVType': 'first',
-        'maq': 'first',
-        'seq': 'first'
-    }).reset_index()
-    clusdf = merged_sv.astype({'Target_start': np.int32, 'Target_end': np.int32, 'SVlen': np.int32, 'maq': np.int16})
-    clusdf.sort_values(by=['Target_start'], inplace=True)
-    clusdf.reset_index(drop=True, inplace=True)
-    clusdf['shift_cluster'] = -1
-    return clusdf
-
 
 def klook_clusters(clusdf, max_diff_func, len_condition_range):
     """
     Assign cluster IDs to each row in the cluster dataframe based on length and position conditions.
     """
-    if len(clusdf) == 1:
+    num_signals = len(clusdf)
+    if num_signals == 1:
         clusdf['shift_cluster'] = -1
         return clusdf
+    
+    # Precompute the 'Target_start' and 'Target_end' columns for quicker access
+    start_values = clusdf['Target_start'].values
+    end_values = clusdf['Target_end'].values
+    svlen_values = clusdf['SVlen'].values
+    
     cluster_id = 0
     clusdf.loc[0, 'shift_cluster'] = 0
-    print(clusdf)
+    
     for i in range(1, len(clusdf)):
-        current_svlen = clusdf.loc[i, 'SVlen']
-        current_start = clusdf.loc[i, 'Target_start']
-        current_end = clusdf.loc[i, 'Target_end']
+        current_svlen = svlen_values[i]
+        current_start = start_values[i]
+        current_end = end_values[i]
         found_cluster = False
-        start_index = max(0, i - 5)
+        # Adjust the previous cluster range dynamically
+        start_index = max(0, i - ceil(num_signals * 0.8))  # previous 80% record
+
+        # Vectorized approach: avoid nested for loops
         for j in range(i - 1, start_index - 1, -1):
-            old_len = clusdf.loc[j, 'SVlen']
+            old_len = svlen_values[j]
             relate_size = round(current_svlen / old_len, 2)
             max_diff = max_diff_func(old_len)
             len_condition = len_condition_range[0] < relate_size < len_condition_range[1]
-            pos_condition = (abs(current_start - clusdf.loc[j, 'Target_start']) <= max_diff or
-                             abs(current_end - clusdf.loc[j, 'Target_end']) <= max_diff)
-            #pos_condition = (abs(current_start - clusdf.loc[j, 'Target_start']) <= old_len*0.5 or
-            #                 abs(current_end - clusdf.loc[j, 'Target_end']) <= old_len*0.5)
-
+            pos_condition = (abs(current_start - start_values[j]) <= max_diff or
+                             abs(current_end - end_values[j]) <= max_diff)
             if len_condition and pos_condition:
                 clusdf.loc[i, 'shift_cluster'] = clusdf.loc[j, 'shift_cluster']
                 found_cluster = True
@@ -150,31 +137,45 @@ def klook_clusters(clusdf, max_diff_func, len_condition_range):
         if not found_cluster:
             cluster_id += 1
             clusdf.loc[i, 'shift_cluster'] = cluster_id
-    print(clusdf)
     return clusdf
 
+def max_diff_func4DEL(old_len):
+    if old_len <= 100:
+        return 50 + ceil((old_len-50) * 0.8)
+    elif 100 < old_len <= 500:
+        return 100 + ceil((old_len-100) * 0.8)
+    elif 500 < old_len <= 5000:
+        return 450 + ceil((old_len-500) * 0.1)
+    elif old_len > 5000:
+        return 1000
 
-def onedepth_all_clus(all_signal, opened_bam, nrate=0.25):
+def max_diff_func4INS(old_len):
+    if old_len <= 100:
+        return 50 + (old_len-50) * 0.5
+    elif 100 < old_len <= 500:
+        return 100 + (old_len-100) * 0.5
+    elif 500 < old_len <= 5000:
+        return 300 + (old_len-500) * 0.1
+    elif old_len > 5000:
+        return 1000
+
+def onedepth_all_clus(all_signal,svtype, opened_bam, nrate=0.25):
     """
     Process the contig or genome level SV signal.
     Strict condition for merge, single chromosome mode.
     """
-
-    def max_diff_func(old_len):
-        if old_len <= 100:
-            return 25
-        elif 100 < old_len <= 500:
-            return 50
-        elif 500 < old_len <= 5000:
-            return 100
-        elif old_len > 5000:
-            return 200
+    
+    if svtype == "INS":
+        max_diff_func= max_diff_func4INS
+    else:
+        max_diff_func= max_diff_func4DEL
+    
     
     if all_signal.shape[0] > 1:
-        all_signal = merge_and_sort(all_signal)
+        all_signal = merge_and_sort_cr(all_signal)
         print(f"******************signal after merging ****************\n {all_signal}")
         if all_signal.shape[0] > 1:
-            all_clus = klook_clusters(all_signal, max_diff_func, (0.7, 1.5))
+            all_clus = klook_clusters(all_signal, max_diff_func, (0.8, 1.2))
         else:
             all_clus = all_signal
     else:
@@ -186,6 +187,8 @@ def onedepth_all_clus(all_signal, opened_bam, nrate=0.25):
     clus = []
     
     print(f"*********************after clustering***********************\n{all_clus}")
+    
+    msv = []
     for clu in all_clus[cluster_col].unique():
         clu_df = all_clus[all_clus[cluster_col] == clu]    
         sv_start = ceil(clu_df['Target_start'].mean())
@@ -207,45 +210,41 @@ def onedepth_all_clus(all_signal, opened_bam, nrate=0.25):
             continue
         print(f"************************cluster done***************************\n{[sv_chrom, sv_start, sv_end, sv_len, svid, svtype, '*', sv_eye, SV_rate, maq, readsname]}")
         clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
+        msv.append(svid)
+    if len(msv) >=2:
+        outmsv = "\t".join(msv)
+        print(f'msv:\t{outmsv}')
     return clus
 
-def lowdepth_clu(clusdf, opened_bam, nreads, support_rate=0.1, add=1):
+def lowdepth_clu(clusdf, svtype, opened_bam, nreads, support_rate=0.1, add=1):
     """
     Process low-depth cluster data.
     Strict condition for clustering.
     """
     clusdf = merge_and_sort(clusdf)
     
-    def max_diff_func(old_len):
-        if old_len <= 100:
-            return 50 + 0.2 * old_len
-        elif 100 < old_len <= 500:
-            return 100 + 0.2 * old_len
-        elif 500 < old_len < 2000:
-            return 200 + 0.2 * old_len
-        else:
-            return 800
+    if svtype == "INS":
+        max_diff_func= max_diff_func4INS
+    else:
+        max_diff_func= max_diff_func4DEL    
 
     clusdf = klook_clusters(clusdf, max_diff_func, (0.8, 1.2))
     print(clusdf.drop(columns=['seq']))
     candisv = candidate_sv(clusdf, opened_bam, nreads, support_rate, add)
     return candisv
 
-
-def highdepth_clu(clusdf, opened_bam, nreads, support_rate=0.1, add=2):
+def highdepth_clu(clusdf, svtype, opened_bam, nreads, support_rate=0.1, add=2):
     """
     Process high-depth cluster data.
     """
     clusdf = merge_and_sort(clusdf)
-
-    def max_diff_func(old_len):
-        if old_len <= 100:
-            return 150
-        elif 100 < old_len <= 500:
-            return 300
-        elif old_len > 500:
-            return 800
-    clusdf = klook_clusters(clusdf, max_diff_func, (0.65, 1.5))
+    
+    if svtype == "INS":
+        max_diff_func= max_diff_func4INS
+    else:
+        max_diff_func= max_diff_func4DEL
+    
+    clusdf = klook_clusters(clusdf, max_diff_func, (0.8, 1.2))
     print(clusdf.drop(columns=['seq']))
     candisv = candidate_sv(clusdf, opened_bam, nreads, support_rate, add)
     return candisv
@@ -256,6 +255,7 @@ def merge_and_sort(clusdf):
     if two signal is from same reads, signals in window will be summed.
     """
     clusdf = clusdf.copy()
+    clusdf.drop_duplicates( subset=["Query_name", "Target_start", "Target_end"], keep="first",inplace=True) ## we dont keep the same reads multiple segment
     print(clusdf)
     clusdf.sort_values(by=['Target_start', 'SVlen'], inplace=True)
     merged_sv = clusdf.groupby('Query_name').agg({
@@ -273,7 +273,37 @@ def merge_and_sort(clusdf):
     clusdf['shift_cluster'] = -1
     return clusdf
 
-def windows_slide4asm(dfs, svtype):
+def merge_and_sort_cr(clusdf):
+    """
+    Merge and sort the cluster dataframe based on specific columns.
+    Optimized version for better performance with large datasets.
+    """
+    clusdf = clusdf.copy()
+    clusdf.drop_duplicates(subset=["Query_name", "Target_start", "Target_end"], keep="first", inplace=True)
+    clusdf.sort_values(['Query_name', 'Target_start'], inplace=True)
+    clusdf['same_query'] = clusdf['Query_name'] == clusdf['Query_name'].shift(1)
+    clusdf['overlap'] = (clusdf['Target_start'] < clusdf['Target_end'].shift(1)) & clusdf['same_query']
+    clusdf['group_key'] = (clusdf['Query_name'] != clusdf['Query_name'].shift(1)) | clusdf['overlap']
+    
+    clusdf['group_key'] = clusdf['group_key'].cumsum()
+    merged_sv = clusdf.groupby('group_key').agg({
+        'Query_name': 'first',
+        '#Target_name': 'first',
+        'Target_start': 'first',
+        'Target_end': 'max',
+        'SVlen': 'sum',
+        'SVType': 'first',
+        'maq': 'first',
+        'seq': 'first'
+    }).reset_index(drop=True)
+    merged_sv = merged_sv.astype({'Target_start': np.int32, 'Target_end': np.int32, 'SVlen': np.int32, 'maq': np.int16})
+    merged_sv.sort_values(by=['Target_start'], inplace=True)
+    merged_sv.reset_index(drop=True, inplace=True)
+    merged_sv['shift_cluster'] = -1
+    return merged_sv
+
+
+def windows_slide4asm(dfs, svtype, window_size=500):
     """
     fix window gap for assemblies
     """
@@ -284,11 +314,13 @@ def windows_slide4asm(dfs, svtype):
     while i < len(dfs):
         current_chrom = str(dfs.at[i, '#Target_name'])
         current_start = dfs.at[i, 'Target_start']
-        window_size = 250  
         j = i  
         while j < len(dfs) and str(dfs.at[j, '#Target_name']) == current_chrom:
             last_in_window_start = dfs.at[j-1, 'Target_start'] if j > i else current_start
-            dynamic_window_end = last_in_window_start + 250
+            if svtype == 'DEL':
+                dynamic_window_end = last_in_window_start + window_size + 250
+            else:
+                dynamic_window_end = last_in_window_start + window_size
     
             if dfs.at[j, 'Target_start'] < dynamic_window_end:
                 j += 1  
@@ -301,7 +333,7 @@ def windows_slide4asm(dfs, svtype):
         i = j  
     return windows
 
-def windows_slide(dfs, depth, svtype, nreads=2):
+def windows_slide(dfs, depth, svtype, nreads=2,window_size=500):
     """
     Slide windows over the dataframe and collect valid windows.
     """
@@ -313,26 +345,14 @@ def windows_slide(dfs, depth, svtype, nreads=2):
         current_chrom = str(dfs.at[i, '#Target_name'])
         current_start = dfs.at[i, 'Target_start']
         current_svlen = dfs.at[i, 'SVlen']
-        if current_svlen < 100:
-            window_size = 200 + current_svlen * 0.2
-        elif 100 < current_svlen <= 500:
-            window_size = 400 + current_svlen * 0.2
-        elif 500 < current_svlen <= 1000:
-            window_size = 600 + current_svlen * 0.2
+        if svtype == 'DEL':
+            window_end = current_start + window_size + 250 ## avoid small fragment deletions
         else:
-            window_size = 800
-        window_end = current_start + window_size
-        #window_size = 500
-        #if svtype in ["INS", "DUP"]:
-        #    window_end = current_start + window_size
-        #else: ## INV DEL
-        #    window_end = current_start + window_size + current_svlen
-        
+            window_end = current_start + window_size
         j = i
         while j < len(dfs) and str(dfs.at[j, '#Target_name']) == current_chrom and dfs.at[j, 'Target_start'] < window_end:
             j += 1
         window_df = dfs[i:j].copy()
-        #if nreads <= len(window_df['Query_name'].unique()) < depth * 100:
         if 2 <= len(window_df['Query_name'].unique()) < depth * 100:
             window_df.index = range(len(window_df))
             windows[current_start] = window_df
@@ -429,7 +449,7 @@ def candidate_tra(window, opened_bam, dtype):
         else:
             SV_rate = 1
         if dtype in ['ont','hifi', 'pb']:
-            ### to one depth ###
+            ## to one depth ##
             if sv_eye >= (local_depth * 0.1 + 0.7 ):
                 tras.append([chr1, chr1_start, chr2_start, sv_len, svid, "TRA", "*", sv_eye, SV_rate, maq, readsname])
         elif dtype in ['cr', 'sr']:
@@ -549,7 +569,7 @@ def process_svtype(args, sv_data, chroms, svtype, depth, nreads, minLen):
                                 print(f'******************************** no {svtype} signal found at {chrom} *******************************')
                                 return []
                             sv_dfs = chrom_data[svtype][chrom_data[svtype]['SVlen'] >= minLen]
-                            sv_windows = windows_slide(sv_dfs, depth, svtype, nreads)
+                            sv_windows = windows_slide(sv_dfs, depth, svtype, nreads,args.window_size)
                             candidate_svs = []
                             if args.dtype == 'hifi':
                                 hdepth = 5
@@ -557,9 +577,9 @@ def process_svtype(args, sv_data, chroms, svtype, depth, nreads, minLen):
                                 hdepth = 10
                             for sv_window in sv_windows.values():
                                 if len(sv_window['Query_name']) > hdepth: 
-                                    candisv = highdepth_clu(sv_window, opened_bam, nreads, args.rate_depth, 1)
+                                    candisv = highdepth_clu(sv_window, svtype, opened_bam, nreads, args.rate_depth, 1)
                                 else:
-                                    candisv = lowdepth_clu(sv_window, opened_bam, nreads, args.rate_depth, 1)
+                                    candisv = lowdepth_clu(sv_window, svtype, opened_bam, nreads, args.rate_depth, 1)
                                 candidate_svs.extend(candisv)
                             return candidate_svs
 
@@ -593,10 +613,10 @@ def process_svtype(args, sv_data, chroms, svtype, depth, nreads, minLen):
                         print(sv_dfs.head(10))
                         print("**************************** Calling one depth all clustering ***********************")
                         candidate_svs = []
-                        win_dfs = windows_slide4asm(sv_dfs, svtype)
+                        win_dfs = windows_slide4asm(sv_dfs, svtype, args.window_size)
                         for win_df in win_dfs.values():
                             print(f'**************************window signals*********************\n{win_df}')
-                            candidate_sv = onedepth_all_clus(win_df, bam_path,max(args.rate_depth,0.25))
+                            candidate_sv = onedepth_all_clus(win_df, svtype, bam_path,max(args.rate_depth,0.25))
                             candidate_svs.extend(candidate_sv)
                         return candidate_svs
                     else:
@@ -667,6 +687,8 @@ if __name__ == "__main__":
     IN.add_argument("--b", dest="bam", type=str, help="the bam file of Individual")
     IN.add_argument("--nreads", dest="nreads", type=int, help="the minimum numbers of reads to support SV, if not provided, we use average_depth / 10 as threshold" )
     IN.add_argument("--rate_depth", dest="rate_depth", type=float, default=0.1, help="the sv supports of local depth ratio to support sv, 0.1 means the percent of local reads shoule support sv")
+    IN.add_argument("--window", dest="window_size", type=int, default=500, help="the window size of signal to parse in klook cluster, 500bp suggested")
+    
     args = parser.parse_args()
     start_t = time()
     tra_clus, del_clus, ins_clus, inv_clus, dup_clus = candidateSV(args)

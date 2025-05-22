@@ -60,21 +60,7 @@ def sam_parser2Breaks(region_sam, min_maq):
         return {}, 0, 0
 
 
-def sv_egde(current_svlen):
-    if current_svlen < 100:
-        window_size = 150 + current_svlen * 0.2
-    elif 100 < current_svlen <= 500:
-        window_size = 200 + current_svlen * 0.2
-    elif 500 < current_svlen <= 1000:
-        window_size = 300 + current_svlen * 0.2
-    else:
-        window_size = 500
-    return window_size + 50
-
-
-
-def sam_primary_parser2Breaks_Del(region_sam, min_maq, sv_size, sv_start, sv_end, minfilt):
-    #sv_shift = sv_egde(sv_size)
+def sam_primary_parser2Breaks_Del(region_sam, min_maq, sv_size):
     breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
     deletions   = defaultdict(int)    # To store deletions in span format
     total_map_reads = 0
@@ -83,72 +69,11 @@ def sam_primary_parser2Breaks_Del(region_sam, min_maq, sv_size, sv_start, sv_end
         for pos in positions:
             breakpoints[chromosome][pos] += 1
     for row in region_sam:
-        del_size = 0
-        readname = row.query_name
         flag = row.flag
         maq  = row.mapping_quality
         maqs += maq
         align_start = int(row.reference_start)
-        chrom = row.reference_name
-        cigar = row.cigarstring
-        #if (row.flag & 0x4) or (row.mapping_quality < min_maq):
-        if (row.flag & 0x4):
-
-            continue
-        total_map_reads += 1
-        cigar_numbers, cigar_types = parse_cigar(cigar)
-        current_start = align_start 
-        align_end = row.reference_end
-        breakpoints_to_update = []
-        if 'H' in cigar_types or 'S' in cigar_types:
-            if cigar_types[0] in 'HS' and align_start > sv_end - 0.5*sv_size: ## right bp
-                breakpoints_to_update.append(align_start)
-            if cigar_types[-1] in 'HS' and align_end < sv_start + 0.5*sv_size: ## left breakpoint
-                breakpoints_to_update.append(align_end)
-            update_breakpoints(chrom, breakpoints_to_update)
-        for i in range(len(cigar_numbers)):
-            length = cigar_numbers[i]
-            ctype = cigar_types[i]
-            if ctype in ['M', '=', 'X']:  # Match or mismatch
-                current_start += length  # Increment current position for these types
-            elif ctype == 'D':
-                if sv_start - 200 < current_start < sv_end + 200:
-                    if sv_size*0.8 <= length <= sv_size*1.2:
-                        deletions[readname] = length
-                    if length >= minfilt:
-                        del_size += length
-                        if sv_size*0.8 <= del_size <= sv_size*1.2:
-                            deletions[readname] = del_size
-                current_start += length
-    
-        if 0.7*sv_size <= del_size <= 1.5*sv_size:
-            deletions[readname] = del_size
-    
-    if total_map_reads >0:
-        print(f'{chrom}:{sv_start}\t{sv_size}:{deletions}')
-        return breakpoints, deletions, total_map_reads, ceil(maqs / total_map_reads)
-    else:
-        return {}, {}, 0, 0
-
-def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start, sv_end, minfilt):
-    breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
-    reads2ins_size = defaultdict(int) 
-    total_map_reads = 0
-    spans = 0
-    maqs = 0
-    effective_span = 0
-    #sv_shift = sv_egde(sv_size)
-    def update_breakpoints(chromosome, positions):
-        for pos in positions:
-            breakpoints[chromosome][pos] += 1
-    for row in region_sam:
-        ins_size = 0
-        readname = row.query_name
-        flag = row.flag
-        maq  = row.mapping_quality
-        maqs += maq
-        align_start = row.reference_start
-        chrom = row.reference_name
+        chr = row.reference_name
         cigar = row.cigarstring
         #if (row.flag & 0x4) or (row.mapping_quality < min_maq):
         if (row.flag & 0x4):
@@ -163,9 +88,60 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start, sv_end
                 breakpoints_to_update.append(align_start)
             if cigar_types[-1] in 'HS':
                 breakpoints_to_update.append(align_end)
-            update_breakpoints(chrom, breakpoints_to_update)
+            update_breakpoints(chr, breakpoints_to_update)
+        for i in range(len(cigar_numbers)):
+            length = cigar_numbers[i]
+            ctype = cigar_types[i]
+            if ctype in ['M', '=', 'X']:  # Match or mismatch
+                current_start += length  # Increment current position for these types
+            elif ctype == 'D':
+                if 0.5 * sv_size < length < 2 * sv_size:
+                    deletion_start = current_start  # Position before deletion starts
+                    deletion_end = current_start + length - 1  # Position before the next base
+                    deletion_key = f"{chr}:{deletion_start}-{deletion_end}"
+                    if deletion_key not in deletions:
+                        deletions[deletion_key] = 1
+                    else:
+                        deletions[deletion_key] += 1  # Count the deletion span
+                current_start += length  # Increment position past deletion
+    if total_map_reads >0:
+        return breakpoints, deletions, total_map_reads, ceil(maqs / total_map_reads)
+    else:
+        return {}, {}, 0, 0
+
+def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start):
+    breakpoints = defaultdict(lambda: defaultdict(int)) # To store breakpoints
+    insertions  = defaultdict(int)   # To store insertions in span format
+    total_map_reads = 0
+    spans = 0
+    maqs = 0
+    effective_span = 0
+    def update_breakpoints(chromosome, positions):
+        for pos in positions:
+            breakpoints[chromosome][pos] += 1
+    for row in region_sam:
+        flag = row.flag
+        maq  = row.mapping_quality
+        maqs += maq
+        align_start = row.reference_start
+        chr = row.reference_name
+        cigar = row.cigarstring
+        #if (row.flag & 0x4) or (row.mapping_quality < min_maq):
+        if (row.flag & 0x4):
+            continue
+        total_map_reads += 1
+        cigar_numbers, cigar_types = parse_cigar(cigar)
+        current_start = align_start 
+        align_end = row.reference_end
+        breakpoints_to_update = []
+        if 'H' in cigar_types or 'S' in cigar_types:
+            if cigar_types[0] in 'HS':
+                breakpoints_to_update.append(align_start)
+            if cigar_types[-1] in 'HS':
+                breakpoints_to_update.append(align_end)
+            update_breakpoints(chr, breakpoints_to_update)
         else:
-            if (align_start + 1000 < sv_start)  and (align_end - 1000 > sv_end):
+            if (align_start + 1000 < sv_start)  and (align_end - 1000 > sv_start):
                 effective_span += 1
 
         for i in range(len(cigar_numbers)):
@@ -175,20 +151,17 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start, sv_end
                 current_start += length  # Increment current position for these types
             elif ctype == 'D':
                 current_start += length  # Increment position past deletion
-            elif ctype == 'I' and (sv_start-200 < current_start <= sv_end + 200) and length >=minfilt: ## since window size in cluster is 500
-                if 0.8*sv_size <= length <= 1.2*sv_size:
-                    reads2ins_size[readname] = length
+            elif ctype == 'I' and (0.5 * sv_size < length < 2 * sv_size):
+                insertion_start = current_start - 1
+                insert_key = f"{chr}:{insertion_start}-{insertion_start + 1}"
+                if insert_key not in insertions:
+                    insertions[insert_key] = 1
                 else:
-                    ins_size += length
-                    if 0.8*sv_size <= length <= 1.2*sv_size:
-                        reads2ins_size[readname] = ins_size
-        if 0.7*sv_size <= ins_size < 1.5*sv_size:
-            reads2ins_size[readname] = ins_size
-        
-    effective_span -= len(reads2ins_size)
+                    insertions[insert_key] += 1
+                effective_span -= 1
+
     if total_map_reads >0:
-        print(f'{chrom}:{sv_start}-{sv_end}\t{sv_size}:{reads2ins_size}')
-        return breakpoints, reads2ins_size, total_map_reads, ceil(maqs / total_map_reads), effective_span
+        return breakpoints, insertions, total_map_reads, ceil(maqs / total_map_reads), effective_span
     else:
         return {},{},0,0,effective_span
 def sam_primary_parser2Breaks_dup(region_sam, min_maq, sv_size):
@@ -271,25 +244,29 @@ def determine_genotype(breaks, depth, homo_rate=0.75,ref_rate = 0.05):
         else:
             return "0/1"
 
-def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, ref_rate, shift, minfilt):
+def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, ref_rate, shift):
     info_return = []
     genotype = "0/0"  # Default genotype
     shift = min(sv_size, 500)
     sv_start_shift = set(range(sv_s - shift, sv_s + shift ))
-    sv_end_shift=set(range(sv_e-shift, sv_e+shift))
     dup_shift = set(range(sv_s - 1000, sv_s - 1000)) ## samll dup capture as ins
     ############ SVIns Case #############
-    breakpoints, inserts, total_map_reads, maq, effective_span = sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e, minfilt)
+    breakpoints, inserts, total_map_reads, maq, effective_span = sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s)
     if total_map_reads == 0:
         info_return.append("./.")
         info_return.append(f"total_map_reads={total_map_reads},maq=0")
         info_return.append(f"INS_rate=0;INS")
         return info_return
     else:
-        count_break_and_Ins = len(inserts)
+        count_break_and_Ins = 0
+        if inserts:  
+            for pos in inserts.keys():
+                ins_s, ins_e = map(int, pos.split(":")[1].split("-"))
+                if ins_s in sv_start_shift or ins_s in dup_shift:
+                    count_break_and_Ins += inserts[pos]
         if breakpoints:   #check breakpoints
             for breakpoint in breakpoints.get(chrome, {}).keys():
-                if breakpoint in sv_start_shift or breakpoint in sv_end_shift: 
+                if breakpoint in sv_start_shift: 
                     count_break_and_Ins += breakpoints[chrome][breakpoint]
         ins_ratio = round(count_break_and_Ins / total_map_reads, 3)
         genotype = determine_genotype(count_break_and_Ins, total_map_reads, homo_rate, ref_rate)
@@ -303,15 +280,15 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, 
         info_return.append(f"INS_rate={ins_ratio};INS")
     return info_return
 
-def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift,minfilt):
+def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift):
     ############ SVDel Case ##############
     info_return = []
     breaks_dict = {}
     genotype = "0/0"  # Default genotype
     sv_start_shift = set(range(sv_s - shift, sv_s + shift))
     sv_end_shift   = set(range(sv_e - shift, sv_e + shift))
-    breakpoints_l, deles_l, total_map_reads_l, maq_l = sam_primary_parser2Breaks_Del(left_sam,  min_maq, sv_size, sv_s, sv_e, minfilt)
-    breakpoints_r, deles_r, total_map_reads_r, maq_r = sam_primary_parser2Breaks_Del(right_sam, min_maq, sv_size, sv_s, sv_e, minfilt)
+    breakpoints_l, deles_l, total_map_reads_l, maq_l = sam_primary_parser2Breaks_Del(left_sam,  min_maq, sv_size)
+    breakpoints_r, deles_r, total_map_reads_r, maq_r = sam_primary_parser2Breaks_Del(right_sam, min_maq, sv_size)
     count_break_and_deles_l = 0
     count_break_and_deles_r = 0
     total_map_reads = total_map_reads_l + total_map_reads_r
@@ -320,9 +297,17 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, h
         info_return.append(f"total_map_reads_l=0;total_map_reads_r=0,maq=0")
         info_return.append(f"deles_l_ratio=0,deles_r_ratio=0;DEL")
         return  info_return
-    
-    count_break_and_deles_l += len(deles_l)
-    count_break_and_deles_r += len(deles_r)
+    if deles_l:  # Check if there are deletion entries ####### if there are deles but not the target deles
+        for pos in deles_l.keys():
+            dele_s, dele_e = map(int, pos.split(":")[1].split("-"))
+            # Check if deletions are within the shifted range left right will have the same results #
+            if dele_s in sv_start_shift:
+                count_break_and_deles_l += deles_l[pos]
+    if deles_r:
+        for pos in deles_r.keys():
+            dele_s, dele_e = map(int, pos.split(":")[1].split("-"))
+            if dele_e in sv_end_shift:
+                count_break_and_deles_r += deles_r[pos]
     if breakpoints_l:
         for breakpoint in breakpoints_l.get(chrome, {}).keys():
             if breakpoint in sv_start_shift:
@@ -374,7 +359,6 @@ def breaks2invGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size
         info_return.append("./.")
         info_return.append(f"total_map_reads_bp1=0;total_map_reads_bp2=0;maq=0")
         info_return.append(f"{breakpoint1}_ratio=0,{breakpoint2}_ratio=0;{sv_type}")
-        return info_return
     if breakpoints_bp1:
         for breakpoint in breakpoints_bp1.get(chrome1, {}).keys():
             if breakpoint in bp1_shift:
@@ -479,7 +463,7 @@ def dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
         info_return.append("./.")
         info_return.append(f"total_map_reads_bp1=0;total_map_reads_bp2=0,maq=0")
         info_return.append(f"bp1={breakpoint1},bp1_ratio=0,bp2={breakpoint2},bp2_ratio=0;{sv_type}")
-        return info_return
+    
     if inserts_bp1:  # Check if there are insertion entries
         for pos in inserts_bp1.keys():
             if pos in ins_shift1:
@@ -596,7 +580,6 @@ def breaks2traGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size
         info_return.append("./.")
         info_return.append(f"total_map_reads_bp1=0;total_map_reads_bp2=0;maq=0")
         info_return.append(f"{breakpoint1}_ratio=0,{breakpoint2}_ratio=0;{sv_type}")
-        return info_return
     if breakpoints_bp1:
         for breakpoint in breakpoints_bp1.get(chrome1, {}).keys():
             if breakpoint in bp1_shift:

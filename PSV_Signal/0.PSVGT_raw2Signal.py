@@ -21,11 +21,14 @@ def construct_minimap2_cmd(ref, sample, out, dtype, cpu, secondary=False):
     elif dtype in ['sr']:
         mapping_type = f"map-hifi"
     elif dtype in ["cr"]: ## since sr data will  assemble to contigs
-        mapping_type = "map-hifi"  # Assembly-based mapping types
+        mapping_type = "map-hifi"
+        #mapping_type = "minimap2 -a -xasm5 --cs -t 10 "
     else:
         raise ValueError("Invalid dtype provided. Choose from ['hifi', 'pb', 'ont', 'sr', 'cr'].")
-        # Construct the Minimap2 command
-    cmd = f"minimap2 -ax {mapping_type} -t {cpu} {secondary_option} -o {out}.sam {ref} {sample}"
+    if dtype in ['cr']:
+        cmd = f"minimap2 -ax {mapping_type} -t {cpu} {secondary_option} -o {out}.sam {ref} {sample}"
+    else:
+        cmd = f"minimap2 -ax {mapping_type} -t {cpu} {secondary_option} -o {out}.sam {ref} {sample}"
     return cmd
 
 def svsignal(args):
