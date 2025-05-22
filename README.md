@@ -145,7 +145,7 @@ lrwxrwxrwx 1 lgb xinwang   63 Jan 28 20:16 0_tmp_hifi_5.gz.bam.bai
 
 ### 2. SV Signal Cluster and Local Depth Based Filter:
 ```sh
-python PSV_Signal/0.KLookCluster_LocalDepthPASS.py   
+python PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py   
 usage: signal filtering through support reads ratio [-h] -f RAW_SIGNAL [-s SHIFT] [-M MAX] -dtype DTYPE [--cov COVFILE] [--b BAM]
 signal filtering through support reads ratio: error: the following arguments are required: -f, -dtype
 
@@ -160,11 +160,11 @@ Input File :
   --cov COVFILE  Coverage File (default: None)
   --b BAM        the bam file of Individual (default: None)
 
-python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr1.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr2.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr3.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr4.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
-python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthPASS.py  -f 5X_Db-Chr5.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py  -f 5X_Db-Chr1.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py  -f 5X_Db-Chr2.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py  -f 5X_Db-Chr3.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py  -f 5X_Db-Chr4.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
+python PSVGT1.0/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py  -f 5X_Db-Chr5.record.txt -s 800 -dtype hifi --b 0_tmp_hifi_5.gz.bam
 
 ### Signal files will be generated ###
 5X_Db-Chr1.record.txt_DEL.signal  5X_Db-Chr2.record.txt_DUP.signal  5X_Db-Chr3.record.txt_INS.signal  5X_Db-Chr4.record.txt_INV.signal
