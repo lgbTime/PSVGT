@@ -556,7 +556,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
             if sequence:
                 sv_record += f"\t{sequence}"
             svsignal_supp.append(sv_record)
-            print(sv_record)
+            
     print("******************** Calling segment segment SV *************************")
 
     for query_chr, query_supp_list in supp_dict.items():
@@ -567,7 +567,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
             pri_chrom = primary_map[2]
             pri_start = int(primary_map[3])
             readseq = primary_map[7] if len(primary_map) == 8 else "*"
-            print(f"********************************* flag: {primary_map[1]}*************************************")
+            #print(f"********************************* flag: {primary_map[1]}*************************************")
             try:
                 pri_flag = int(primary_map[1]) % 32 > 15
             except ValueError:
@@ -581,7 +581,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
 
             # Classify supplementary segments into samedir, invdir, and diffchr categories
             for supp in supps:
-                print(f'{primary_map[0:5]}\t{supp[0:5]}')
+                #print(f'{primary_map[0:5]}\t{supp[0:5]}')
                 try:
                     chrom, supp_flag, supp_maplen = supp[2], int(supp[1]) % 32 > 15, supp[5][1]
                 except ValueError:
@@ -604,7 +604,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
                 maq1, maq2 = leftmap[6], rightmap[6]
                 maq = (int(maq1) + int(maq2)) // 2
 
-                # INS (Insertion) Detection
+                ## INS ##
                 if abs(rightmap[3] - leftmap[4]) <= 300:
                     overlapmap = rightmap[3] - leftmap[4]
                     ins_size = sh3 - len1 - sh1 - overlapmap
@@ -612,8 +612,12 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
                         sv_start = min(rightmap[3], leftmap[4])
                         sv_end = sv_start + 1
                         svid = f'{pri_chrom}:{sv_start}-{sv_end}_INSLEN={ins_size}'
-                        seq = readseq[sh1 + len1: sh3 - overlapmap]
+                        if readseq:
+                            seq = readseq[sh1 + len1: sh3 - overlapmap]
+                        else:
+                            seq = "*"
                         add_svcall(pri_chrom, readname, sv_start, sv_end, ins_size, maq, svid, "INS", "*")
+                        print(f'{svid}: detect from: {leftmap[0:5]}\t{rightmap[0:5]}')
                 ## DEL ##
                 overlapmap = sh1 + len1 - sh3
                 if -200 < overlapmap < 1500:  ## check or search for better
@@ -624,6 +628,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
                         svid = f'{pri_chrom}:{sv_start}-{sv_end}_DELLEN={del_size}'
                         add_svcall(pri_chrom, readname, sv_start,
                                    sv_end, del_size, maq, svid, "DEL", '*')
+                        print(f'{svid}: detect from: {leftmap[0:5]}\t{rightmap[0:5]}')
                 ## DUP ##
                 lap1 = sh1 + len1 - sh3
                 if -200 < lap1 < 500 and (leftmap[4] - rightmap[3]) >= max(50, lap1):
@@ -633,6 +638,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
                         svid = f'{pri_chrom}:{sv_start}-{sv_end}_DUPLEN={dup_size}'
                         add_svcall(pri_chrom, readname, sv_start,
                                    sv_end, dup_size, maq, svid, "DUP", "*")
+                        print(f'{svid}: detect from: {leftmap[0:5]}\t{rightmap[0:5]}')
                 lap2 = sh3 + len2 - sh1
                 if -200 < lap2 < 500 and (rightmap[4] - leftmap[3]) >= max(1000, lap2):
                     dup_size = rightmap[4] - leftmap[3] - lap2
@@ -641,6 +647,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
                         svid = f'{pri_chrom}:{sv_start}-{sv_end}_DUPLEN={dup_size}'
                         add_svcall(pri_chrom, readname, sv_start,
                                    sv_end, dup_size, maq, svid, 'DUP', "*")
+                        print(f'{svid}: detect from: {leftmap[0:5]}\t{rightmap[0:5]}')
             ## INV ##
             for supp in invdir:
                 if (supp[3] > primary_map[3] and (supp[4] - primary_map[4]) > -200) or \
@@ -662,6 +669,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
                             svid = f'{pri_chrom}:{sv_start}-{sv_end}_INVLEN={inv_size}'
                             add_svcall(pri_chrom, readname, sv_start,
                                        sv_end, inv_size, maq, svid, 'INV', "*")
+                            print(f'{svid}: detect from: {leftmap[0:5]}\t{rightmap[0:5]}')
 
                     lap2 = sh4 + len2 - sh1
                     if -200 < lap2 < 500 and (rightmap[3] - leftmap[3]) >= max(100, lap2):
@@ -671,6 +679,7 @@ def segment_segment_sv(lines, min_size, max_size, chromosome_list):
                             svid = f'{pri_chrom}:{sv_start}-{sv_end}_INVLEN={inv_size}'
                             add_svcall(pri_chrom, readname, sv_start,
                                        sv_end, inv_size, maq, svid, "INV", "*")
+                            print(f'{svid}: detect from: {leftmap[0:5]}\t{rightmap[0:5]}')
             ## TRA ##
             ### win size 500 may fit into the TRA ###
             for supp in diffchr:

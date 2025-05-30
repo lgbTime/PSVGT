@@ -97,8 +97,8 @@ def candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate=0.1,add=1):
         if sv_eye >= nreads -1: ## filter 
             if [sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname] not in clus:
                 print(f"{sv_eye} reads support {svid},local coverage is {min([start_local_map,end_local_map])} ")
-                clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
-                msv.append(svid)
+                #clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
+                #msv.append(svid)
             else:
                 print(f"{svid}: number sv reads lower than required")
     if len(set(msv)) >= 2:
@@ -106,7 +106,7 @@ def candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate=0.1,add=1):
         print(f'msv:\t{outmsv}')
     return clus
 
-def klook_clusters(clusdf, max_diff_func, len_condition_range):
+def klook_clusters(clusdf, max_diff_func, len_fold=0.8):
     """
     Assign cluster IDs to each row in the cluster dataframe based on length and position conditions.
     """
@@ -134,9 +134,9 @@ def klook_clusters(clusdf, max_diff_func, len_condition_range):
         # Vectorized approach: avoid nested for loops
         for j in range(i - 1, start_index - 1, -1):
             old_len = svlen_values[j]
-            relate_size = round(current_svlen / old_len, 2)
+            relate_size = min(current_svlen / old_len, old_len/current_svlen)
             max_diff = max_diff_func(old_len)
-            len_condition = len_condition_range[0] < relate_size < len_condition_range[1]
+            len_condition = relate_size > len_fold
             pos_condition = (abs(current_start - start_values[j]) <= max_diff or
                              abs(current_end - end_values[j]) <= max_diff)
             if len_condition and pos_condition:
@@ -179,31 +179,31 @@ def onedepth_all_clus(all_signal,svtype, opened_bam, nrate=0.25):
     else:
         max_diff_func= max_diff_func4DEL
     
-    
     if all_signal.shape[0] > 1:
         all_signal = merge_and_sort_cr(all_signal)
         print(f"******************signal after merging ****************\n {all_signal}")
         if all_signal.shape[0] > 1:
-            all_clus = klook_clusters(all_signal, max_diff_func, (0.8, 1.2))
+            all_clus = klook_clusters(all_signal, max_diff_func, 0.8)
         else:
+            all_signal['shift_cluster'] = -1
             all_clus = all_signal
     else:
+        all_signal['shift_cluster'] = -1
         all_clus = all_signal
+    print(all_clus[['#Target_name','Target_start','Target_end','SVlen','shift_cluster']])
 
     sv_chrom = all_clus["#Target_name"].unique()[0]
     svtype = all_clus["SVType"].unique()[0]
     cluster_col = all_clus.columns[-1]
     clus = []
-    
-    print(f"*********************after clustering***********************\n{all_clus}")
-    
     msv = []
     for clu in all_clus[cluster_col].unique():
-        clu_df = all_clus[all_clus[cluster_col] == clu]    
-        sv_start = ceil(clu_df['Target_start'].mean())
-        sv_len = ceil(clu_df['SVlen'].mean())
-        sv_end = ceil(clu_df['Target_end'].mean())
-        maq = ceil(clu_df['maq'].mean())
+        clu_df = all_clus[all_clus[cluster_col] == clu] 
+        print(clu_df[['#Target_name','Target_start','Target_end','SVlen','shift_cluster']])   
+        sv_start = mode_or_median(clu_df['Target_start'])
+        sv_len =   mode_or_median(clu_df['SVlen'])
+        sv_end =   mode_or_median(clu_df['Target_end'])
+        maq =      mode_or_median(clu_df['maq'])
         readsname = clu_df['Query_name'].tolist()
         svid = f'{sv_chrom}:{sv_start}-{sv_end}_{svtype}={sv_len}'
         print(svid)
@@ -237,7 +237,7 @@ def lowdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, support_rate=0.1, 
     else:
         max_diff_func= max_diff_func4DEL    
 
-    clusdf = klook_clusters(clusdf, max_diff_func, (0.8, 1.2))
+    clusdf = klook_clusters(clusdf, max_diff_func, 0.8)
     print(clusdf[['#Target_name','Target_start','Target_end','SVlen','shift_cluster']])
 
     candisv = candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate, add)
@@ -254,10 +254,38 @@ def highdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, support_rate=0.1,
     else:
         max_diff_func= max_diff_func4DEL
     
-    clusdf = klook_clusters(clusdf, max_diff_func, (0.8, 1.2))
+    clusdf = klook_clusters(clusdf, max_diff_func, 0.8)
     print(clusdf[['#Target_name','Target_start','Target_end','SVlen','shift_cluster']])
     candisv = candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate, add)
     return candisv
+
+def filter_overlaps(df):
+    """
+    to filter overlap SV within same queryname
+    """
+    filtered_groups = []
+    for query, group in df.groupby('Query_name'):
+        if len(group) <= 1:
+            filtered_groups.append(group)
+            continue
+        sorted_group = group.sort_values(
+            by=['Target_start', 'SVlen'],
+            ascending=[True, False]
+        )
+        kept = []
+        last_end = -1
+        for _, row in sorted_group.iterrows():
+            start = row['Target_start']
+            end = row['Target_end']
+            if start > last_end:  
+                kept.append(row)
+                last_end = end
+            else:
+                 if end > last_end:
+                     kept[-1] = row
+                     last_end = end
+        filtered_groups.append(pd.DataFrame(kept))    
+    return pd.concat(filtered_groups, ignore_index=True)
 
 def merge_and_sort(clusdf):
     """
@@ -283,35 +311,39 @@ def merge_and_sort(clusdf):
     clusdf['shift_cluster'] = -1
     return clusdf
 
+
 def merge_and_sort_cr(clusdf):
     """
-    Merge and sort the cluster dataframe based on specific columns.
-    Optimized version for better performance with large datasets.
+    filter overlap SV on same query name;
+    merge sv based on query name;
     """
     clusdf = clusdf.copy()
-    clusdf.drop_duplicates(subset=["Query_name", "Target_start", "Target_end"], keep="first", inplace=True)
-    clusdf.sort_values(['Query_name', 'Target_start'], inplace=True)
-    clusdf['same_query'] = clusdf['Query_name'] == clusdf['Query_name'].shift(1)
-    clusdf['overlap'] = (clusdf['Target_start'] < clusdf['Target_end'].shift(1)) & clusdf['same_query']
-    clusdf['group_key'] = (clusdf['Query_name'] != clusdf['Query_name'].shift(1)) | clusdf['overlap']
-    
-    clusdf['group_key'] = clusdf['group_key'].cumsum()
-    merged_sv = clusdf.groupby('group_key').agg({
-        'Query_name': 'first',
+    clusdf.drop_duplicates(
+        subset=["Query_name", "Target_start", "Target_end"],
+        keep="first",
+        inplace=True
+    )
+    clusdf = filter_overlaps(clusdf)
+    merged_sv = clusdf.groupby('Query_name').agg({
         '#Target_name': 'first',
-        'Target_start': 'first',
-        'Target_end': 'max',
-        'SVlen': 'sum',
+        'Target_start': 'min',       
+        'Target_end': 'max',    
+        'SVlen': 'sum',              
         'SVType': 'first',
         'maq': 'first',
         'seq': 'first'
-    }).reset_index(drop=True)
-    merged_sv = merged_sv.astype({'Target_start': np.int32, 'Target_end': np.int32, 'SVlen': np.int32, 'maq': np.int16})
-    merged_sv.sort_values(by=['Target_start'], inplace=True)
-    merged_sv.reset_index(drop=True, inplace=True)
-    merged_sv['shift_cluster'] = -1
-    return merged_sv
-
+    }).reset_index()
+    clusdf = merged_sv[['#Target_name', 'Target_start', 'Target_end', 'SVlen', 'SVType', 'maq', 'seq', 'Query_name']]
+    clusdf = clusdf.astype({
+        'Target_start': np.int32,
+        'Target_end': np.int32,
+        'SVlen': np.int32,
+        'maq': np.int16
+    })
+    clusdf.sort_values(by=['Target_start'], inplace=True)
+    clusdf.reset_index(drop=True, inplace=True)
+    clusdf['shift_cluster'] = -1
+    return clusdf
 
 def windows_slide4asm(dfs, svtype, window_size=500):
     """

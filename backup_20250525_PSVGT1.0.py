@@ -109,7 +109,7 @@ def pairend2contig(path, threads, ref):
 if __name__ == "__main__":
     import pyfiglet
     def print_large_SVInDel():
-        ascii_art = pyfiglet.figlet_format("PSVGT", font="slant")
+        ascii_art = pyfiglet.figlet_format("Pop SVGT", font="slant")
         print(ascii_art)
     print_large_SVInDel()
     import argparse
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     parser.add_argument("-polyploid", "--polyploid", help="for polyploid haplotype resolved assembly like potato(4 haplotype assemblies available), to get a merge genotype of samples please provide table list each line in format hap1\thap2\thap3\thapn\tSampleName")
 
 
-    parser.add_argument("-w", "--max_workers", default = 6,type=int, help="the max workers thread pool excutor, 6 means run 6 samples at a time")
+    parser.add_argument("-w", "--max_workers", default = 4,type=int, help="the max workers thread pool excutor, 4 means run 4 samples at a time")
     parser.add_argument("-t", "--threads", default = 10, help="the cpu use to assembly contig or bwa mapping")
     parser.add_argument("-minimapCPU", "--minimapCPU", default = 10, help="the cpu in minimap mapping")
     parser.add_argument("-r", "--refGenome", required=True, help="the reference genome ")
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("-p",  "--popInDel",default="no", help= "using the primer3 to design the primer for each SVInDel")
     parser.add_argument("-b",  "--breaker",default="no", help= "using the break points info to support the SVInDel Genotyping, this will perform bwa mapping process and breakpoints genotype")
     parser.add_argument("-maq",  "--maq",default=1,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
-    parser.add_argument("-csv",  "--csv",default=0.10, type=float, help= "the percent of reads that support a candidate SV (0.10 means at a depth 20X region, a SV signal should have at least 2 reads support, this parameter is for the variaty depth of hifi/ont/pb samples")
+    parser.add_argument("-csv",  "--csv",default=0.15, type=float, help= "the percent of reads that support a candidate SV (0.15 means at a depth 20X region, a SV signal should have at least 3 reads support, this parameter is for the variaty depth of hifi/ont/pb samples")
     parser.add_argument("-nreads",  "--nreads", type=int, help= "the number of reads to support a candidate SV (SV signal should have at least numbers reads support, this parameter is for the various depth of hifi/ont/pb samples")
     parser.add_argument("--num_hap", "--num_hap", default=2, type=int, help="numbers of haplotypes within local region should be defined by species ploid, 2 for diploid, 4 for Tetraploid")
     parser.add_argument("-msv","--msv_mode",default="no", help= "In msv mode signals of INS,DEL,INV,DUP,TRA will captured from ont/hifi/pb, while for assemble contig from short reads or genome lelve samples we detect SVInDel Only. If no hifi or ont or pacbio data is provided, please setting -msv no, PSVGT will detect SVInDel Only")
@@ -203,13 +203,13 @@ if __name__ == "__main__":
                     print(stdout,file=all_log)
                 results0.append((stdout,stderr,returncode,cmd))
     
-
     done_analysor = file_capture(args.outdir, ".record.txt")
     def run_clu2fil_cmd(clu2fil_cmd):
         try:
             subprocess.run(clu2fil_cmd, shell=True, check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error running command: {clu2fil_cmd}\n{e}")
+    
     def process_single_contig(contig, dtype, args, PSVGT, fai):
         try:
             ## final chromsome result ##
@@ -290,6 +290,34 @@ if __name__ == "__main__":
             subprocess.run(ACC_SV_cmd, shell=True, check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error processing {basename(contig)}: {str(e)}")
+
+    def add_commands4fq(files, dtype):
+        for contig in files:
+            done_name = f"{args.outdir}/0_tmp_{basename(contig)}_{fai[0].iloc[-1]}.record.txt"  ## last chrom
+            if done_name not in done_analysor:
+                maq = min(args.maq, 60)
+                signal_cmd = f'python {PSVGT}/PSV_Signal/0.PSVGT_raw2Signal.py -i {contig} -dtype {dtype} -r {args.refGenome} -m {args.min}  -maq {maq} -o {args.outdir} -minimapCPU {args.minimapCPU} -msv {args.msv_mode}'
+                try:
+                    subprocess.run(signal_cmd, shell=True, check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Error running signal command: {signal_cmd}\n{e}")
+                    continue
+
+                clu2fil_cmds = []
+                for chrom in fai[0]:
+                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py -f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max} --b {args.outdir}/0_tmp_{basename(contig)}.bam --cov {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.cov --window {args.window} --num_hap {args.num_hap} {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt.log'
+                    clu2fil_cmds.append(clu2fil_cmd)
+                pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+                pool.map(run_clu2fil_cmd, clu2fil_cmds)
+                pool.close()
+                pool.join()
+
+                ACC_SV_cmd = f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/0_tmp_{basename(contig)} -fai  {args.refGenome}.fai --nrate {args.csv}'
+                try:
+                    subprocess.run(ACC_SV_cmd, shell=True, check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Error running ACC_SV command: {ACC_SV_cmd}\n{e}")
+    
     def add_commands4fq(files, dtype):
         max_workers = min(len(files), args.max_workers)
         if max_workers >0:
@@ -301,12 +329,40 @@ if __name__ == "__main__":
                         contig, dtype, args, PSVGT, fai
                     ) for contig in files
                 ]
+
+        
                 for future in concurrent.futures.as_completed(futures):
                     try:
                         future.result()
                     except Exception as e:
                         print(f"Thread error: {str(e)}")
 
+    def add_commands4bam(files, dtype):
+        for bam in files:
+            done_name = f"{args.outdir}/0_tmp_{basename(bam)}_{fai[0].iloc[-1]}.record.txt"
+            if done_name not in done_analysor:
+                maq = min(args.maq, 60)  ## biger than illumina breakpoints quality
+                signal_cmd = f'python {PSVGT}/PSV_Signal/0.Signal4bam_PSVGT.py -b {bam} -o {args.outdir}/{basename(bam)} -m {args.min} -maq {args.maq} -dtype {dtype} -msv {args.msv_mode} -fai {args.refGenome}.fai'
+                try:
+                    subprocess.run(signal_cmd, shell=True, check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Error running signal command: {signal_cmd}\n{e}")
+                    continue
+                clu2fil_cmds = []
+                for chrom in fai[0]:
+                    clu2fil_cmd = f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py -f {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt -dtype {dtype} -s 800 -M {args.max}  --b {bam} --cov {args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.cov --window {args.window} --num_hap {args.num_hap} >{args.outdir}/{basename(bam).replace(".bam", "")}_{chrom}.record.txt.log'
+                    clu2fil_cmds.append(clu2fil_cmd)
+                pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+                pool.map(run_clu2fil_cmd, clu2fil_cmds)
+                pool.close()
+                pool.join()
+
+                ACC_SV_cmd = f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py -preffix {args.outdir}/{basename(bam).replace(".bam", "")} -fai  {args.refGenome}.fai --nrate {args.csv}'
+                try:
+                    subprocess.run(ACC_SV_cmd, shell=True, check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Error running ACC_SV command: {ACC_SV_cmd}\n{e}")
+    
     def process_single_bam(bam, dtype, args, PSVGT, fai):
         try:## last chromosome result ##
             done_flag = f"{args.outdir}/0_tmp_{basename(bam)}_{fai[0].iloc[-1]}.record.txt"
@@ -382,6 +438,7 @@ if __name__ == "__main__":
                 f'-fai {args.refGenome}.fai --nrate {args.csv}'
             )
             subprocess.run(ACC_SV_cmd, shell=True, check=True)
+
         except subprocess.CalledProcessError as e:
             print(f"Error processing {basename(bam)}: {str(e)}")
 

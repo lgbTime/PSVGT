@@ -125,7 +125,7 @@ def sam_primary_parser2Breaks_Del(region_sam, min_maq, sv_size, sv_start, sv_end
             deletions[readname] = del_size
     
     if total_map_reads >0:
-        print(f'{chrom}:{sv_start}\t{sv_size}:{deletions}')
+        #print(f'{chrom}:{sv_start}\t{sv_size}:{deletions}')
         return breakpoints, deletions, total_map_reads, ceil(maqs / total_map_reads)
     else:
         return {}, {}, 0, 0
@@ -187,7 +187,7 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start, sv_end
         
     effective_span -= len(reads2ins_size)
     if total_map_reads >0:
-        print(f'{chrom}:{sv_start}-{sv_end}\t{sv_size}:{reads2ins_size}')
+        #print(f'{chrom}:{sv_start}-{sv_end}\t{sv_size}:{reads2ins_size}')
         return breakpoints, reads2ins_size, total_map_reads, ceil(maqs / total_map_reads), effective_span
     else:
         return {},{},0,0,effective_span

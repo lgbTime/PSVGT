@@ -1,6 +1,6 @@
 ![PSVGT](https://github.com/lgbTime/PSVGT/logo.png)                         
-## PSVGT is a versatile program for SV detection and genotyping at population scale, supporting all sequence length (>150+ pbs) and depth free, providing CAPS & InDel development Modules and SV annotation function
-The short reads samples will be de novo into contigs, while assemble samples and long reads sequencing data could be directory used in the SV detection and Genotyping.
+## PSVGT is a versatile program for SV detection and genotyping at population scale, supporting all sequence length (>125+ pbs), and has been tested in haplotype assemblies, diploid assemblies, tetraploid assemblies, allodiploid assemblies, common assemblies/long reads and illumina short reads, providing CAPS & InDel development Modules and SV annotation function
+The short reads samples will be de novo into contigs, while haplotypes assemblies and long reads sequencing data could be directory used in the SV detection and Genotyping.
 ## 💻 Installation
 PSVGT required **megahit**, **minimap2**, **samtools**, and has been tested at python3.11
 the  folow python dependency is required.
@@ -13,59 +13,33 @@ pip install tqdm
 pip install pysam
 pip install intervaltree
 ```
+## 🔨 Usage
+```sh
+    ____  ______    ______________
+   / __ \/ ___/ |  / / ____/_  __/
+  / /_/ /\__ \| | / / / __  / /   
+ / ____/___/ /| |/ / /_/ / / /    
+/_/    /____/ |___/\____/ /_/     
 
-## Performance of PSVGT at benchmark 
+usage: PSVGT1.0.py [-h] [-o OUTDIR] [-sr SRDIR] [-hifi HIFIDIR] [-ont ONTDIR] [-pb PBDIR] [-cr CRDIR]
+                   [-win WINDOW] [-diploid DIPLOID] [-polyploid POLYPLOID] [-w MAX_WORKERS] [-t THREADS]
+                   [-minimapCPU MINIMAPCPU] -r REFGENOME [-g GFF] [-m MIN] [-M MAX] [-e POPCAPS] [-p POPINDEL]
+                   [-b BREAKER] [-maq MAQ] [-csv CSV] [-nreads NREADS] [--num_hap NUM_HAP] [-msv MSV_MODE]
+                   [-lr_homo_rate LR_HOMO_RATE] [-lr_ref_rate LR_REF_RATE] [-sr_homo_rate SR_HOMO_RATE]
+                   [-sr_ref_rate SR_REF_RATE] [-span SPAN]
+PSVGT1.0.py: error: the following arguments are required: -r/--refGenome
 ```
-Detect & GT	PSVGT			DeBreak			cuteSV			Sniffles2
-	Rec	Pre	F1	Rec	Pre	F1	Rec	Pre	F1	Rec	Pre	F1
-HiFi												
-DEL	99.86	99.91	99.88	96.97	97.03	97.00	99.51	99.85	99.68	99.89	99.95	99.92
-INS	98.46	99.62	99.03	83.82	84.89	84.35	97.90	99.69	98.79	94.49	94.20	94.34
-DUP	92.60	94.39	93.49	90.20	90.02	90.11	65.70	69.82	67.70	78.00	66.38	71.72
-INV	96.30	98.27	97.27	84.60	85.63	85.11	97.20	96.14	96.67	71.40	89.92	79.60
-TRA	98.63	99.59	99.11	64.93	64.93	64.93	98.49	96.64	97.56	86.30	86.07	86.18
-ONT												
-DEL	99.89	99.89	99.89	97.01	96.99	97.00	94.97	99.78	97.32	99.87	99.39	99.63
-INS	98.47	99.05	98.76	84.17	84.98	84.57	93.19	99.46	96.22	94.44	93.70	94.07
-DUP	95.40	96.17	95.78	86.30	89.80	88.02	63.20	74.35	68.32	78.50	71.43	74.80
-INV	95.40	98.45	96.90	86.80	88.93	87.85	90.90	95.58	93.18	70.50	88.01	78.29
-TRA	98.49	99.31	98.90	66.30	66.12	66.21	98.77	96.01	97.37	86.99	86.87	86.93
-PacBio CLR												
-DEL	99.79	99.92	99.85	97.87	98.04	97.95	99.16	99.61	99.38	99.58	99.84	99.71
-INS	97.62	99.24	98.42	86.01	87.93	86.96	96.20	99.12	97.64	93.89	94.20	94.05
-DUP	96.80	97.98	97.38	89.80	93.15	91.45	61.80	66.81	64.21	77.90	71.47	74.55
-INV	97.20	99.18	98.18	88.20	88.73	88.47	97.10	95.29	96.19	72.20	83.86	77.59
-TRA	98.36	99.58	98.97	66.30	65.41	65.85	99.04	96.14	97.57	98.90	89.25	93.83
-Short Reads(150bp)												
-DEL	34.33	96.14	50.59	*	*	*	*	*	*	*	*	*
-INS	91.32	99.84	95.39	*	*	*	*	*	*	*	*	*
-DUP	*	*	*	*	*	*	*	*	*	*	*	*
-INV	*	*	*	*	*	*	*	*	*	*	*	*
-TRA	*	*	*	*	*	*	*	*	*	*	*	*
-Assembly(two haplotype genome)												
-DEL	98.61	99.97	99.29	*	*	*	*	*	*	*	*	*
-INS	98.64	99.99	99.31	*	*	*	*	*	*	*	*	*
-DUP	96.50	100.00	98.22	*	*	*	*	*	*	*	*	*
-INV	*	*	*	*	*	*	*	*	*	*	*	*
-TRA	*	*	*	*	*	*	*	*	*	*	*	*
-```									
+**polyploid SV detection**: Please setting --num_hap parameter coordinated with the number of haplotypes( 2 for diploid, 4 for tetraploid).
+**SV genotyping**: Genotyping in PSVGT is force genotyping mode, which taking candidate SV info, and extract mapping info from aligment, SV CIAGR and breakpoints, and spaned reads were counted to infered 1/1, 0/1, 0/0. In tetraploid species long reads mapping, we suggest lr_homo_rate should in range(0.75, 0.95). For common assembly long reads mapping, we suggest lr_homo_rate should in range(0.75, 0.95).
+
+## Highest sensitivity and genotype accuracy of PSVGT at long reads benchmark
+![downsample](./img/downsample.png)
+
+## Performance of PSVGT at simuleted long reads benchmark
+![downsample](./img/simulated_benchmark.png) 
+					
 																								
-## force GT using hifi signal
-```
-Force GT	PSVGT			DeBreak			cuteSV			Sniffles2		
-	Rec	Pre	F1	Rec	Pre	F1	Rec	Pre	F1	Rec	Pre	F1
-Short Reads(150bp)												
-DEL GT	99.55	99.68	99.61	*	*	*	*	*	*	*	*	*
-INS GT	98.14	99.29	98.71	*	*	*	*	*	*	*	*	*
-DUP GT	95.34	100.00	97.61	*	*	*	*	*	*	*	*	*
-INV GT	97.50	99.49	98.48	*	*	*	*	*	*	*	*	*
-TRA GT	98.49	99.86	99.17	*	*	*	*	*	*	*	*	*
-Assembly Genome(two haplotype genome)											
-DEL GT	99.94	99.99	99.96	*	*	*	*	*	*	*	*	*
-INS GT	98.64	99.99	99.31	*	*	*	*	*	*	*	*	*
-INV GT	98.00	100.00	98.99	*	*	*	*	*	*	*	*	*
-TRA GT	98.63	100.00	99.31	*	*	*	*	*	*	*	*	*
-``` 
+
 
 ## ⏩ Quick Start
 ### One-Step PSVGT
@@ -252,7 +226,7 @@ python PSVGT1.0/PSVGT1.0.py -cr genome_bam -r ref.fa -msv yes -m 50 -o outfolder
 ```
 cat polyploid.info
 C_hap1_genome.fasta.sorted.bam	C_hap2_genome.fasta.sorted.bam	C_hap3_genome.fasta.sorted.bam	C_hap4_genome.fasta.sorted.bam	Eig
-python PSVGT1.0.py -cr genome_bam -r ref.fa -msv no -m 50 -o outfolder --polyploid polyploid.info
+python PSVGT1.0.py -cr genome_bam -r ref.fa -msv no -m 50 -o outfolder --polyploid polyploid.info --num_hap 4
 ```
 
 ## 🧬 PSVGT ToolKits Commands

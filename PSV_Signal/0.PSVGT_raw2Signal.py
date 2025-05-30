@@ -42,7 +42,7 @@ def svsignal(args):
     print(cmd1)
     run_command(cmd1)
     start_t = time()
-    if args.msv == "yes" and args.dtype in ["hifi", "ont", "pb"]:
+    if args.msv == "yes":
         cmd2 = f"python {sub_scripts_folder}/0.Signal4bam_PSVGT.py -b {args.outdir}/{outSV}.bam -o {args.outdir}/{outSV} -m {args.min} -maq {args.maq} -dtype {args.dtype} -msv yes -fai {args.ref}.fai"
     else:
         cmd2 = f"python {sub_scripts_folder}/0.Signal4bam_PSVGT.py -b {args.outdir}/{outSV}.bam -o {args.outdir}/{outSV} -m {args.min} -maq {args.maq} -dtype {args.dtype} -msv no -fai {args.ref}.fai "
