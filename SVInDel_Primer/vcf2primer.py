@@ -120,7 +120,7 @@ parser.add_argument("vcf_file", help="the vcf file from PSVGT")
 parser.add_argument("ref", help="the reference genome to extract sequence design primers")
 parser.add_argument("--min", help="the min size of InDel", default=50,type=int)
 parser.add_argument("--max", help="the max size of InDel", default=600, type=int)
-parser.add_argument("--frank", help="the exten size from the target region", default=600, type=int)
+parser.add_argument("--frank", help="the exten size from the target region", default=300, type=int)
 parser.add_argument("--maf", help="the minor allele frequency setting for the InDel Primer", default=0.01, type=float)
 
 args = parser.parse_args()
@@ -177,11 +177,13 @@ for line in lines:
     startI = int(SVID.split(":")[1].split("-")[0])
     endI   = int(SVID.split(":")[1].split("-")[1].split("_")[0])
     sv_size = int(SVID.split(":")[1].split("-")[1].split("_")[1])
+    
     alt_maf = round(info[9:].count("1/1") / len(info[9:]), 2)
-    if alt_maf <= args.maf:
-        continue
-    if alt_maf > 1 - args.maf:
-        continue
+    if len(info) > 10: ## more than one samples
+        if alt_maf <= args.maf:
+            continue
+        if alt_maf > 1 - args.maf:
+            continue
     if sv_size >= args.max:
         continue
     if sv_size <= args.min:

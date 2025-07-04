@@ -240,7 +240,7 @@ def main(gff_file, sv_file, output_file, geneid, cdsid):
     print(sv.head())
     sv.to_csv(f'{sv_file}_tmp.tab',header=True,sep="\t",index=None)
 
-    print(sv.iloc[0,[3]])
+    #print(sv.iloc[0,[3]])
     genedf, cdsdf, chroms = extract_gene_cds(gff_file, geneid, cdsid)
     genedf["ID"] = genedf["ID"].str.replace('"', "")
     cdsdf["ID"] = cdsdf["ID"].str.replace('"', "")
@@ -263,22 +263,26 @@ def main(gff_file, sv_file, output_file, geneid, cdsid):
                     bdict[f"{gene}__cds{i + 1}"] = cds_region
                 for i, intron_region in enumerate(gene_intron_regions[gene]):
                     bdict[f'{gene}__intron{i + 1}'] = intron_region
-                    if utr3_region[gene] != "UTR3 Info Lost":
-                        bdict[f'{gene}__utr3'] = utr3_region[gene]
-                    if utr5_region[gene] != "UTR5 Info Lost":
-                        bdict[f'{gene}__utr5'] = utr5_region[gene]
-            gene_body = pd.DataFrame(bdict).T
-            gene_body["gene"] = gene_body.index
-            gene_body["gene"] = gene_body["gene"].str.split("__", expand=True)[0]
-            gene_body.dropna(inplace=True)
-            print(f"********************* the gene_body format df **********************\n{gene_body.head()}")
-            del_overlapper(del_pos=sv, region=gene_body, chrom=chrom, ori_indel=outsv, outeach=outeach)
-            ins_overlapper(indel_pos=sv, region=gene_body, chrom=chrom, ori_indel=outsv, outeach=outeach)
+                    if gene in utr3_region.keys():
+                        if utr3_region[gene] != "UTR3 Info Lost":
+                            bdict[f'{gene}__utr3'] = utr3_region[gene]
+                    if gene in  utr5_region.keys():
+                        if utr5_region[gene] != "UTR5 Info Lost":
+                            bdict[f'{gene}__utr5'] = utr5_region[gene]
+            if bdict:
+                gene_body = pd.DataFrame(bdict).T
+                gene_body["gene"] = gene_body.index
+            
+                gene_body["gene"] = gene_body["gene"].str.split("__", expand=True)[0]
+                gene_body.dropna(inplace=True)
+                print(f"********************* the gene_body format df **********************\n{gene_body.head()}")
+                del_overlapper(del_pos=sv, region=gene_body, chrom=chrom, ori_indel=outsv, outeach=outeach)
+                ins_overlapper(indel_pos=sv, region=gene_body, chrom=chrom, ori_indel=outsv, outeach=outeach)
     outsv.to_csv(f"{args.sv}_anno.txt",header=True,index=None,sep="\t")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process gene and structural variant data.")
     parser.add_argument('-g', '--gff', required=True, help='Path to the GFF file (e.g., TAIR10_gene.gff)')
-    parser.add_argument('-s', '--sv', required=True, help='Path to the SV vcf file format in PSVGT')
+    parser.add_argument('-s', '--sv', required=True, help='Path to the sv vcf file')
     parser.add_argument('-m', '--mRNA', default="ID", help='to extract GeneID, some gff is not in ID=Geneid, here default is ID')
     parser.add_argument('-c', '--cds', default="Parent", help='to extract cds feature coordinated GeneID, some gff is not in Parent=Geneid, here default is Parent')
     parser.add_argument('-o', '--output', default='SVInDels_Lead_Gene_Variants.txt', help='Output file name (default: SVInDels_Lead_Gene_Variants.txt)')
