@@ -280,9 +280,20 @@ Db-Chr1	256076	Db-Chr1:256076-256296_221	N	<DEL>	.	PASS	.	GT	1/1	1/1	1/1
 Db-Chr1	356036	Db-Chr1:356036-357213_1178	N	<DEL>	.	PASS	.	GT	1/1	1/1	1/1
 Db-Chr1	359380	Db-Chr1:359380-359381_88	N	<INS>	.	PASS	.	GT	1/1	1/1	1/1
 Db-Chr1	381761	Db-Chr1:381761-381762_256	N	<INS>	.	PASS	.	GT	1/1	1/1	1/1
-Db-Chr1	399719	Db-Chr1:399719-399720_91	N	<INS>	.	PASS	.	GT	1/1	1/1	1/1
 
-python SVInDel_Primer/vcf2primer.py PSVGT_all.vcf2.SVInDel Db-1_genome.fa 50 500 500 > PSVInDel_Primer4Pop.txt
+usage: MAF InDel Marker Analysis For PSVGT InDel VCF [-h] [--min MIN] [--max MAX] [--frank FRANK] [--maf MAF] vcf_file ref
+positional arguments:
+  vcf_file       the vcf file from PSVGT
+  ref            the reference genome to extract sequence design primers
+
+optional arguments:
+  -h, --help     show this help message and exit
+  --min MIN      the min size of InDel (default: 50)
+  --max MAX      the max size of InDel (default: 600)
+  --frank FRANK  the exten size from the target region (default: 300)
+  --maf MAF      the minor allele frequency setting for the InDel Primer (default: 0.01)
+
+python SVInDel_Primer/vcf2primer.py PSVGT_all.vcf2.SVInDel Db-1_genome.fa  > PSVInDel_Primer4Pop.txt
 ```
 
 ## 🔎 Note !!!!!!! Information
