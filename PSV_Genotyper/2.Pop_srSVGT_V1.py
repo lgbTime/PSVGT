@@ -70,11 +70,12 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift, s
         return "\t".join(map(str, out + genotype))
     if "TRA" in info[5]:
         svid = info[4]
-        chr2_s2, chr1_s1 = svid.split("_")[0].split(':'), svid.split("_")[1].split(":")
-        chrome1, bp1 = chr1_s1[0], int(chr1_s1[1])
-        chrome2, bp2 = chr2_s2[0], int(chr2_s2[1])
-        bp1_sam = opened_sam.fetch(reference=chrome1, start=bp1 - shift, end=bp1 + shift)
-        bp2_sam = opened_sam.fetch(reference=chrome2, start=bp2 - shift, end=bp2 + shift)
+        chrome1, bp1 = info[0], int(info[1])
+        chrome2, bp2 = svid.split(":")[0], int(info[2])
+        bp1_left = max(bp1 - shift, 0)
+        bp2_left = max(bp2 - shift, 0)
+        bp1_sam = opened_sam.fetch(reference=chrome1, start=bp1_left, end=bp1 + shift)
+        bp2_sam = opened_sam.fetch(reference=chrome2, start=bp2_left, end=bp2 + shift)
         sv_size = 0
         genotype = traGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, "TRA", shift)
         if genotype[0] != "1/1":

@@ -168,8 +168,8 @@ with open(args.vcf_file) as f:
 fa = readfa2Dict(args.ref)
 header = ""
 for line in lines:
-    if "#" in line:
-        print(line.strip(),"Seqid\tSeq.\tForward primers\tReverse primers\tMiniPCR Product Primer\tRef PCR size\tQuery PCR size",sep="\t") 
+    if "#CHROM" in line:
+        print("\t".join(line.strip().split("\t")[0:5]),"\t".join(line.strip().split("\t")[9:]),"MAF\tSeqid\tSeq.\tForward primers\tReverse primers\tMiniPCR Product Primer\tRef PCR size\tQuery PCR size",sep="\t") 
         continue
     info = line.strip().split("\t")
     SVID = info[2] ## Chr1:22023-22242_220

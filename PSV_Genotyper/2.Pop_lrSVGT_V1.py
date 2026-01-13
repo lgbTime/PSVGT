@@ -51,9 +51,9 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
             shift = 500
             left_most = max(bp1 - shift, 0)
             region_sam = opened_sam.fetch(reference=chrome, start=left_most, end=bp2 + shift)
-            genotype = little_dupGT(sampleID, region_sam, chrome, bp1, bp2, sv_size, min_maq, "DUP", shift=shift)
+            genotype = little_dupGT(sampleID, region_sam, chrome, bp1, bp2, sv_size, min_maq, "DUP", shift = shift)
         else:
-            genotype = dupGT(sampleID, bp1_sam, bp2_sam, chrome, chrome, bp1, bp2, sv_size, min_maq, "DUP", shift=shift)
+            genotype = dupGT(sampleID, bp1_sam, bp2_sam, chrome, chrome, bp1, bp2, sv_size, min_maq, "DUP", shift = shift)
         return "\t".join(map(str, out + genotype))
 
     if "INV" in info[5]:
@@ -72,9 +72,9 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
 
     if "TRA" in info[5]:
         svid = info[4]
-        chr2_s2, chr1_s1 = svid.split("_")[0].split(':'), svid.split("_")[1].split(":")
-        chrome1, bp1 = chr1_s1[0], int(chr1_s1[1])
-        chrome2, bp2 = chr2_s2[0], int(chr2_s2[1])
+        #Lsat_v11_chr4	127272099	8722760	0	Lsat_v11_chr7:8722760_Lsat_v11_chr4:127272099	TRA
+        chrome1, bp1 = info[0], int(info[1])
+        chrome2, bp2 = svid.split(":")[0], int(info[2])
         shift = 500
         bp1_left = max(bp1 - shift, 0)
         bp2_left = max(bp2 - shift, 0)

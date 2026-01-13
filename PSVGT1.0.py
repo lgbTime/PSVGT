@@ -121,7 +121,8 @@ if __name__ == "__main__":
     parser.add_argument("-ont", "--ontdir", help="a directory contain nanopore ont reads file or indexed bam files of ont")
     parser.add_argument("-pb", "--pbdir", help="a directory contain PacBio CLR genomic reads files or indexed bam files of pb")
     parser.add_argument("-cr", "--crdir", help="a directory contain the fasta file of assembly contig/chromosome level or indexed bam files of samples ")
-    parser.add_argument("-win", "--window",default=500,type=int,help="Window size to parse signal, this parameter is to merge fragment SV due to aligment, default window size is 500bp to merge cluster the SV with a sv_start less than window size")
+    parser.add_argument("-fix_window", "--fix_window", default="no", help="PSVGT allow clustering signal in both flexible(size adaptive) and fix window sliding to cluster signal, for case of haplotype genomes analysis, we suggest setting to yes, while long reads sequencing datasets we suggest no")
+    parser.add_argument("-win", "--window",default=500,type=int,help="Window size to parse signal, this parameter is to merge fragment SV due to aligment, default fix window size is 500bp to merge cluster the SV with a sv_start less than window size")
     parser.add_argument("-diploid", "--diploid", help="for diploid resolved assembly, to get a phased genotype please provide table list each line in format hap1\thap2\tSampleName in cr directory")
     parser.add_argument("-polyploid", "--polyploid", help="for polyploid haplotype resolved assembly like potato(4 haplotype assemblies available), to get a merge genotype of samples please provide table list each line in format hap1\thap2\thap3\thapn\tSampleName")
 
@@ -136,11 +137,11 @@ if __name__ == "__main__":
     parser.add_argument("-e",  "--popcaps",default="no", help= "population caps analysis, the caps marker has a maf >= 0.05 will be output, input yes PopCaps will perform the analysis")
     parser.add_argument("-p",  "--popInDel",default="no", help= "using the primer3 to design the primer for each SVInDel")
     parser.add_argument("-b",  "--breaker",default="no", help= "using the break points info to support the SVInDel Genotyping, this will perform bwa mapping process and breakpoints genotype")
-    parser.add_argument("-maq",  "--maq",default=1,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
+    parser.add_argument("-maq",  "--maq",default=30,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
     parser.add_argument("-csv",  "--csv",default=0.10, type=float, help= "the percent of reads that support a candidate SV (0.10 means at a depth 20X region, a SV signal should have at least 2 reads support, this parameter is for the variaty depth of hifi/ont/pb samples")
     parser.add_argument("-nreads",  "--nreads", type=int, help= "the number of reads to support a candidate SV (SV signal should have at least numbers reads support, this parameter is for the various depth of hifi/ont/pb samples")
     parser.add_argument("--num_hap", "--num_hap", default=2, type=int, help="numbers of haplotypes within local region should be defined by species ploid, 2 for diploid, 4 for Tetraploid")
-    parser.add_argument("-msv","--msv_mode",default="no", help= "In msv mode signals of INS,DEL,INV,DUP,TRA will captured from ont/hifi/pb, while for assemble contig from short reads or genome lelve samples we detect SVInDel Only. If no hifi or ont or pacbio data is provided, please setting -msv no, PSVGT will detect SVInDel Only")
+    parser.add_argument("-msv","--msv_mode",default="no", help= "Setting msv to `yes` signals of INS,DEL,INV,DUP,TRA will captured, while setting to `no` Only insertions and deletions will be capture from alignment ")
     parser.add_argument("-lr_homo_rate", dest="lr_homo_rate",default=0.75, type=float, help="to determine a homozygous site, if 0.75 of the local mapping signal suport the sv the genotyoe will be 1/1, for species like polyploid potato we suggest 0.8")
     parser.add_argument("-lr_ref_rate", dest="lr_ref_rate",default=0.10, type=float, help="to determine reference allele, in a 100X data, if suport of local signal less than 0.10, the genotype will be 0/0")
     parser.add_argument("-sr_homo_rate", dest="sr_homo_rate",default=0.65, type=float, help="to determine a homozygous site, if 0.65 of the local mapping signal suport the sv the genotyoe will be 1/1, you can lower down the value if your specise have a low heterozygous rate")
@@ -149,6 +150,10 @@ if __name__ == "__main__":
     parser.add_argument("-span", dest="span", default=50, type=int, help="heterzygous evdence, a read (maping start - 50) < breakpoint < (mapping end - 50) will be taken as span the breakpoint, for 150 bp reads we suggest 50, for 125bp may be 45 will be better")
 
     args = parser.parse_args()
+    if args.fix_window == "yes":
+        KLOOK = "0.KLookCluster_LocalDepthAdaptive.py"
+    else:
+        KLOOK = "0.KLOOK_Cluster_Flexible_Window_Break_Depth_Adaptive.py"
     start_t = time()
     all_log = open("log4SVGT.txt", "w")
     check_dir(args.outdir)
@@ -233,7 +238,7 @@ if __name__ == "__main__":
             with multiprocessing.Pool(processes=args.max_workers) as pool:
                 if dtype in ['hifi','ont','pb'] and args.csv and args.nreads:
                     clu2fil_cmds = [
-                        f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                        f'python {PSVGT}/PSV_Signal/{KLOOK} '
                         f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
                         f'-dtype {dtype} -s 800 -M {args.max} '
                         f'--rate_depth {args.csv} --nreads {args.nreads}'
@@ -246,7 +251,7 @@ if __name__ == "__main__":
                 
                 elif dtype in ['hifi','ont','pb'] and args.csv and not args.nreads:
                     clu2fil_cmds = [
-                        f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                        f'python {PSVGT}/PSV_Signal/{KLOOK} '
                         f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
                         f'-dtype {dtype} -s 800 -M {args.max} '
                         f'--rate_depth {args.csv} '
@@ -258,7 +263,7 @@ if __name__ == "__main__":
                     ]
                 elif dtype in ['hifi','ont','pb'] and args.nreads and not args.csv:
                     clu2fil_cmds = [
-                        f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                        f'python {PSVGT}/PSV_Signal/{KLOOK} '
                         f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
                         f'-dtype {dtype} -s 800 -M {args.max} '
                         f'--nreads {args.nreads} '
@@ -270,7 +275,7 @@ if __name__ == "__main__":
                     ]
                 else:
                     clu2fil_cmds = [
-                        f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                        f'python {PSVGT}/PSV_Signal/{KLOOK} '
                         f'-f {args.outdir}/0_tmp_{basename(contig)}_{chrom}.record.txt '
                         f'-dtype {dtype} -s 800 -M {args.max} '
                         f'--b {args.outdir}/0_tmp_{basename(contig)}.bam '
@@ -328,7 +333,7 @@ if __name__ == "__main__":
             base_prefix = basename(bam).replace(".bam", "")
             if args.nreads and args.csv and dtype in ['hifi', 'ont', 'pb']:
                 chrom_commands = [
-                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                    f'python {PSVGT}/PSV_Signal/{KLOOK} '
                     f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
                     f'-dtype {dtype} -s 800 -M {args.max} '
                     f'--window {args.window} '
@@ -339,7 +344,7 @@ if __name__ == "__main__":
                 ]
             elif args.csv and dtype in ['hifi', 'ont', 'pb'] and not args.nreads:
                 chrom_commands = [
-                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                    f'python {PSVGT}/PSV_Signal/{KLOOK} '
                     f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
                     f'-dtype {dtype} -s 800 -M {args.max} '
                     f'--rate_depth {args.csv} '
@@ -350,7 +355,7 @@ if __name__ == "__main__":
                 ]
             elif args.nreads and dtype in ['hifi', 'ont', 'pb'] and not args.csv:
                 chrom_commands = [
-                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                    f'python {PSVGT}/PSV_Signal/{KLOOK} '
                     f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
                     f'-dtype {dtype} -s 800 -M {args.max} '
                     f'--nreads {args.nreads}  '
@@ -361,7 +366,7 @@ if __name__ == "__main__":
                 ]
             else:
                 chrom_commands = [
-                    f'python {PSVGT}/PSV_Signal/0.KLookCluster_LocalDepthAdaptive.py '
+                    f'python {PSVGT}/PSV_Signal/{KLOOK} '
                     f'-f {args.outdir}/{base_prefix}_{chrom}.record.txt '
                     f'-dtype {dtype} -s 800 -M {args.max} '
                     f'--window {args.window} '
@@ -376,11 +381,31 @@ if __name__ == "__main__":
                 pool.map(run_clu2fil_cmd, chrom_commands)
 
             # Phase 3: merge signal
-            ACC_SV_cmd = (
-                f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py '
-                f'-preffix {args.outdir}/{base_prefix} '
-                f'-fai {args.refGenome}.fai --nrate {args.csv}'
-            )
+            nhap ={1:0.99, 2:0.49, 3:0.33, 4:0.24, 5:0.19, 6:0.16, 7:0.14, 8:0.12}
+            ## for haplotype genomes
+            if dtype in ['cr']:
+                if args.diploid or args.polyploid: 
+                    nrate = nhap[1] ## for haplotype genome
+                else:
+                    nrate = nhap[args.num_hap] ## for all haplotypes in one fasta genome
+                ACC_SV_cmd = (
+                    f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py '
+                    f'-preffix {args.outdir}/{base_prefix} '
+                    f'-fai {args.refGenome}.fai --nrate {nrate} --minimaq {args.maq}'
+                )
+            elif dtype in ['sr']: ## currently sr assemble can only capture one haplotype
+                nrate = nhap[1]
+                ACC_SV_cmd = (
+                    f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py '
+                    f'-preffix {args.outdir}/{base_prefix} '
+                    f'-fai {args.refGenome}.fai --nrate {nrate} --minimaq {args.maq}'
+                )
+            else:
+                ACC_SV_cmd = (
+                    f'python {PSVGT}/PSV_Signal/1.ACCSV_Signal_Cluster.py '
+                    f'-preffix {args.outdir}/{base_prefix} '
+                    f'-fai {args.refGenome}.fai --nrate {args.csv} --minimaq {args.maq}'
+                )
             subprocess.run(ACC_SV_cmd, shell=True, check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error processing {basename(bam)}: {str(e)}")
@@ -435,7 +460,7 @@ if __name__ == "__main__":
         already_maps += file_capture(args.crdir, ".bam")
 
 
-    ## step1 to get uniq population SV records and clustering the signal by breakpoints shift ##
+    ## step1 no-redundant population SV records and clustering the signal by breakpoints shift ##
     run_command(f"python {PSVGT}/PSV_Signal/1.PSV_signal_cluster.py -d {args.outdir} -s 50")
     
     ## step2 genotypiing by long seq mapping map ##

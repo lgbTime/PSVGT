@@ -213,7 +213,7 @@ def parse_cigar2clipinfo(cigarstring):
         rightclip = numbers[-1]
     return [leftclip, read_len, rightclip]
 
-def segmentsv4lr(supp_list,min_size, max_size, chromosome_list):
+def segmentsv4lr(supp_list,min_size, max_size, chromosome_list, minimaq):
     """
     Collecting the supplementary alignment to identify the INS, DEL, DUP, INV, TRA signals
     LongRead align to reference that has "SA" will be recorded as dict as follow:
@@ -228,7 +228,7 @@ def segmentsv4lr(supp_list,min_size, max_size, chromosome_list):
     else:
         svsignal_supp = []
         def add_svcall(chrom,readname, start, end, size, maq, svid,sv_type, sequence=None):
-            if maq == 60:
+            if maq >= minimaq:
                 sv_record = f"{chrom}\t{readname}\t{start}\t{end}\t{size}\t{maq}\t{svid}\t{sv_type}"
                 if sequence:
                     sv_record += f"\t{sequence}"
@@ -256,6 +256,8 @@ def segmentsv4lr(supp_list,min_size, max_size, chromosome_list):
             maq1,maq2 = leftmap[6], rightmap[6]
             readname = primary_map[0]
             maq = (int(maq1) + int(maq2)) // 2
+            if maq < minimaq:
+                continue
             ## DEL ##
             overlapmap = sh1 + len1 - sh3
             if -200 < overlapmap < 1500:   ## check or search for better
@@ -386,6 +388,8 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
         target_start = line.reference_start
         target_end   = line.reference_end
         maq = line.mapping_quality
+        #if maq < min_maq:
+        #    continue
         flag = line.flag
         strand = "-" if flag & 0x10 else "+"
         cigar = line.cigarstring
@@ -438,7 +442,7 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
                     supp_dict[readname] += [suppinfo]
         if supp_dict:
             if 2<= len(supp_dict[readname])<=20:
-                supp_svsignal = segmentsv4lr(supp_dict[readname],minLen, maxLen, chromosome_list)
+                supp_svsignal = segmentsv4lr(supp_dict[readname],minLen, maxLen, chromosome_list,min_maq)
     return svInDels, covinfo , supp_svsignal
 
 

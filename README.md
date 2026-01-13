@@ -50,7 +50,7 @@ python PSVGT1.0/PSVGT1.0.py -hifi test_hifi \
 			    -pb test_pb  \
 			    -sr test_sr \
 			    -cr test_cr \
-			    -r Db-1_ref/Db-1_genome.fa -b yes -o out4PSVGT -msv yes
+			    -r Db-1_ref/Db-1_genome.fa -b yes -o out4PSVGT -msv yes -p yes
 ```
 
 For specific sequence types, PSVGT uses a coordinated mapping strategy and program. In the folders `test_hifi`, `test_ont`, and `test_pb`, the sequencing data should be in gz-compressed FASTQ or mapped BAM format. The samples in the `test_cr` folder should be FASTA files with `.fasta` or `.fa` file extensions. The `test_sr` folder allows paired-end short reads data in gz-compressed FASTQ format.
@@ -60,6 +60,7 @@ For specific sequence types, PSVGT uses a coordinated mapping strategy and progr
 - `-msv`: Detects all SVs instead of just SVInDels.
 - `-cr`: the samples in test_cr folder should be assembly contigs or genome.
 - `-sr`: the samples in test_sr folder should be short reads paired data.
+- `-p`: use primer3 to develop primers for InDel 
 
 
 ## Step by Step PSVGT from pre-align BAM file

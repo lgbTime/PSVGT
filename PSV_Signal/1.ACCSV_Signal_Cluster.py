@@ -108,9 +108,9 @@ def tra_clu(tradf,  max_diff=800):
 
 
 def drop_ins_from_dup(df):
+    out=open("log", 'w')
     ins = df[df['SVType'].isin(['INS', 'DUP'])]
     ins = ins.sort_values(by=['#Target_name', 'Target_start'])
-    print(ins.head())
     ins.index = range(len(ins))
     dup_rows = ins[ins['SVType'] == 'DUP']
     if dup_rows.empty:
@@ -118,18 +118,20 @@ def drop_ins_from_dup(df):
 
     dropINS = []
     for index, dup_row in dup_rows.iterrows():
-        start_index = max(0, index - 3)
-        end_index = min(len(df), index + 3)
+        start_index = max(0, index - 10)
+        end_index = min(len(df), index + 10)
         nearby_ins_rows = ins[(ins.index >= start_index) & (ins.index < end_index)]
-        
+        print(nearby_ins_rows, file=out)
         for ins_index, ins_row in nearby_ins_rows.iterrows():
-            if (dup_row['Target_start'] < ins_row['Target_start'] < dup_row['Target_end'] and
+            if (dup_row['Target_start'] < ins_row['Target_start'] - 50 < dup_row['Target_end'] and
                     dup_row['#Target_name'] == ins_row['#Target_name']):
-                ratio = ins_row['SVlen'] / dup_row['SVlen']
-                if 0.8 <= ratio <= 1.2:
+                ratio = min(ins_row['SVlen'] / dup_row['SVlen'], dup_row['SVlen']/ins_row['SVlen'])
+                if ratio >= 0.8:
                     dropINS.append(ins_row['SVID'])
     filtered_df = df[~df['SVID'].isin(dropINS)]
     print(f'******************************* drop {len(dropINS)} INS SV since they are DUP **************************************')
+    print(f'******************************* drop {dropINS} INS SV since they are DUP **************************************')
+    out.close()
     return filtered_df
 
 def read_file(file_name):
@@ -164,9 +166,9 @@ def candidateSV(args):
         if args.nrate and not args.nreads:
             sv = sv[sv["sv_rate"] >= args.nrate]
         elif args.nreads and not args.nrate:
-            sv = sv[sv["sv_nreads"] >= args.nreads]
+            sv = sv[sv["cluster_size"] >= args.nreads]
         elif args.nreads and args.nrate:
-            sv = sv[(sv["sv_rate"] >= args.nrate) | (sv["sv_nreads"] >= args.nreads)]
+            sv = sv[(sv["sv_rate"] >= args.nrate) | (sv["cluster_size"] >= args.nreads)]
 
     for file_name in file_lists[1:]:
         svi = read_file(file_name)
@@ -177,9 +179,9 @@ def candidateSV(args):
         if args.nrate and not args.nreads:
             sv = sv[sv["sv_rate"] >= args.nrate]
         elif args.nreads and not args.nrate:
-            sv = sv[sv["sv_nreads"] >= args.nreads]
+            sv = sv[sv["cluster_size"] >= args.nreads]
         elif args.nreads and args.nrate:
-            sv = sv[(sv["sv_rate"] >= args.nrate) | (sv["sv_nreads"] >= args.nreads)]
+            sv = sv[(sv["sv_rate"] >= args.nrate) | (sv["cluster_size"] >= args.nreads)]
 
     ori = sv.shape
     sv_types = sv["SVType"].unique()
@@ -225,7 +227,7 @@ def candidateSV(args):
     svs_df = pd.DataFrame(out)
     sv_out = drop_ins_from_dup(svs_df)
     sv_out.loc[:,"SVlen"] = sv_out["SVlen"].astype(int)
-    sv_out[sv_out["SVlen"] <= args.max].to_csv(f"{args.preffix}_Clustered_Record.txt",header=True,index=None,sep="\t")
+    sv_out[(sv_out["SVlen"] <= args.max) & (sv_out['maq']>=args.minimaq)].to_csv(f"{args.preffix}_Clustered_Record.txt",header=True,index=None,sep="\t")
     now = sv_out.shape
     print(f'Original data shape: {ori}, after clustering: {now}\nOutput file is {args.preffix}_Clustered_Record.txt')
 
@@ -240,6 +242,7 @@ if __name__ == "__main__":
     IN.add_argument("--nreads", dest="nreads", type=int, help="filter signal by minimum support reads")
     IN.add_argument("--nrate", dest="nrate",   type=float, help="filter signal by minimum ratio of signal")
     IN.add_argument("--nn", dest="nreads_nrate",action="store_true", help="strict filter for signal use both meet threshold of nreads and nrate, if not --nn, keep SV meet nreads or nrate")
+    IN.add_argument("--minimaq", dest="minimaq", type=int, default=50,help="minimum mapping quality of SV")
     args = parser.parse_args()
     start_t = time()
     candidateSV(args)

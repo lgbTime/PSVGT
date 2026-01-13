@@ -175,7 +175,7 @@ def sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_start, sv_end
                 current_start += length  # Increment current position for these types
             elif ctype == 'D':
                 current_start += length  # Increment position past deletion
-            elif ctype == 'I' and (sv_start-200 < current_start <= sv_end + 200) and length >=minfilt: ## since window size in cluster is 500
+            elif ctype == 'I' and (sv_start - 300 < current_start <= sv_end + sv_size) and length >=minfilt: ## since window size in cluster is 500
                 if 0.8*sv_size <= length <= 1.2*sv_size:
                     reads2ins_size[readname] = length
                 else:
@@ -277,7 +277,7 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, 
     shift = min(sv_size, 500)
     sv_start_shift = set(range(sv_s - shift, sv_s + shift ))
     sv_end_shift=set(range(sv_e-shift, sv_e+shift))
-    dup_shift = set(range(sv_s - 1000, sv_s - 1000)) ## samll dup capture as ins
+    dup_shift = set(range(sv_s - sv_size, sv_s + sv_size)) ## samll dup capture as ins
     ############ SVIns Case #############
     breakpoints, inserts, total_map_reads, maq, effective_span = sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e, minfilt)
     if total_map_reads == 0:
@@ -420,6 +420,7 @@ def little_dupGT(sampleID, region_sam, chrome, bp1, bp2, sv_size, min_maq, sv_ty
     ins_shift1 = set(range(bp1 - sv_size, bp1 + sv_size))
     ins_shift2 = set(range(bp2 - sv_size, bp2 + sv_size))
 
+
     breakpoints_bp, inserts, total_map_reads, maq = sam_primary_parser2Breaks_dup(region_sam, min_maq, sv_size)
 
     count_break_bp = 0
@@ -469,7 +470,7 @@ def dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
     bp2_shift = set(range(bp2 - shift, bp2 + shift))
     ins_shift1 = set(range(bp1 - shift, bp1 + ceil(shift+ sv_size/2)))
     ins_shift2 = set(range(bp2 - shift - ceil(sv_size / 2), bp2 + shift))
-
+    ins_shift = set(range(bp1 - shift, bp2 + shift))
     breakpoints_bp1, inserts_bp1, total_map_reads_bp1, maq1 = sam_primary_parser2Breaks_dup(bp1_sam, min_maq, sv_size)
     breakpoints_bp2, inserts_bp2, total_map_reads_bp2, maq2 = sam_primary_parser2Breaks_dup(bp2_sam, min_maq, sv_size)
     count_break_bp1 = 0
@@ -482,7 +483,7 @@ def dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
         return info_return
     if inserts_bp1:  # Check if there are insertion entries
         for pos in inserts_bp1.keys():
-            if pos in ins_shift1:
+            if pos in ins_shift:
                 count_break_bp1 += inserts_bp1[pos]
     if breakpoints_bp1:
         for breakpoint in breakpoints_bp1.get(chrome1, {}).keys():
@@ -491,7 +492,7 @@ def dupGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_m
 
     if inserts_bp2:  # Check if there are insertion entries
         for pos in inserts_bp2.keys():
-            if pos in ins_shift2:
+            if pos in ins_shift:
                 count_break_bp2 += inserts_bp2[pos]
     if breakpoints_bp2:
         for breakpoint in breakpoints_bp2.get(chrome2, {}).keys():
