@@ -273,6 +273,7 @@ This project is described in the following preprint:
 **bioRxiv 2026.01.10.698766v2**
 [https://doi.org/10.1101/2026.01.10.698766v2](https://doi.org/10.1101/2026.01.10.698766v2)
 
+https://www.biorxiv.org/content/10.64898/2026.01.10.698766v2
 ---
 
 ## 📧 Contact
