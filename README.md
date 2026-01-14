@@ -1,10 +1,5 @@
-    ____  ______    ______________
-   / __ \/ ___/ |  / / ____/_  __/
-  / /_/ /\__ \| | / / / __  / /   
- / ____/___/ /| |/ / /_/ / / /    
-/_/    /____/ |___/\____/ /_/     
                                
-## PSVGT: Population-Scale Structural Variant Calling and Genotyping Computation Framework
+##🧬🧬 PSVGT: Population-Scale Structural Variant Calling and Genotyping Computation Framework
 
 **PSVGT** is a versatile toolkit for **structural variant (SV) detection and genotyping at population scale**.  
 It supports sequencing reads of both long/short platform, and assemblies. the performance has been tested on:
