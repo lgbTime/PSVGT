@@ -1,5 +1,9 @@
-![PSVGT](https://github.com/lgbTime/PSVGT/logo.png)
-
+    ____  ______    ______________
+   / __ \/ ___/ |  / / ____/_  __/
+  / /_/ /\__ \| | / / / __  / /   
+ / ____/___/ /| |/ / /_/ / / /    
+/_/    /____/ |___/\____/ /_/     
+                               
 ## PSVGT: Population-Scale Structural Variant Calling and Genotyping Computation Framework
 
 **PSVGT** is a versatile toolkit for **structural variant (SV) detection and genotyping at population scale**.  
@@ -280,5 +284,4 @@ This project is described in the following preprint:
 ## 📧 Contact
 
 For questions or support:
-**Email:** [13414960404@163.com](mailto: 13414960404@163.com)
-
+**Email:** [13414960404@163.com]
