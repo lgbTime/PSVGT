@@ -204,7 +204,7 @@ Chr2    5100000 Chr1    155500
 Chr3    2000    Chr4    3030320
 ```
 
-**convert table to PSVGT input sigals**
+**Convert SV Table to PSVGT Input Sigals**
 ```sh
 python PSVGT1.0/PSV_Signal/SVinfo2PSVGT_Candidate.py -i sv_table.txt -o PSV.signal.txt
 
