@@ -161,9 +161,7 @@ Output:
 ### 4. Merge Population SV Signals
 
 ```bash
-python PSVGT1.0/PSV_signal/1.PSV_signal_cluster.py \
-    -d ./ \
-    -s 40
+python PSVGT1.0/PSV_signal/1.PSV_signal_cluster.py -d ./ -s 40
 ```
 
 Final candidate SV file:
@@ -184,6 +182,45 @@ python PSVGT1.0/PSV_Genotyper/2.Pop_lrSVGT_V1.py \
     -mapf 0_tmp_hifi_5.gz.bam \
     -n 5X_hifi \
     -o output_dir
+```
+
+---
+
+## 🧬 For User Interest SV Genotyping
+To genotyping your interest SV sets, you have to have the mapping bam files and provie the SV table as below:
+**1st columns is chr, 2nd is position, 3rd is SV size or translocation chrx, 4th is SV type or position of chrx**
+
+```sh
+cat sv_table.txt
+Chr1    10025486    2129    DEL
+Chr2    12548600    1290    DEL
+Chr1    10041503    1140    INS
+Chr1    10141999    5440    INS
+Chr2    61159250    65543   DUP
+Chr2    92422310    1223    DUP
+Chr1    14132000    1656    INV
+Chr5    19413200    2676    INV
+Chr2    5100000 Chr1    155500
+Chr3    2000    Chr4    3030320
+```
+
+**convert table to PSVGT input sigals**
+```sh
+python PSVGT1.0/PSV_Signal/SVinfo2PSVGT_Candidate.py -i sv_table.txt -o PSV.signal.txt
+
+# Genotyping your SV in the  samples of long reads or genome mapping
+python PSVGT1.0/PSV_Genotyper/2.Pop_lrSVGT_V1.py \
+    -i PSV.signal.txt \
+    -m 30 -s 100 \
+    -mapf 0_tmp_hifi_5.gz.bam \
+    -n 5X_hifi -o output_dir
+
+# Genotyping your SV in the  samples of short reads mapping
+python PSVGT1.0/PSV_Genotyper/2.Pop_srSVGT_V1.py  \
+    -i PSV.signal.txt \
+    -m 30 -s 30 \
+    -mapf samplexx_illumina_short_reads.bam \
+    -n samplexx -o output_dir
 ```
 
 ---

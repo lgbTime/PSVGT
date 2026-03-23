@@ -113,7 +113,7 @@ def my_primer(info, seq, seqid, seq_args_left, seq_args_right, global_args, sv_s
             miniPCR1 = min(pos_r_list) - max(pos_f_list)
             miniPCR2 = miniPCR1 - sv_size
             outinfo = "\t".join(info)
-            print(f"{outinfo}\t{seqid}\t{seq}\tForward primers: {set(pos_f)}\tReverse primers: {set(pos_r)}\tMiniPCR_Pair_Primer:{(best_forward_primer,best_reverse_primer)}\tRefPCRsize:{miniPCR1}\tQueryPCRsize:{miniPCR2}")
+            print(f"{outinfo}\t{seqid}\t{seq}\tForward primers: {set(pos_f)}\tReverse primers: {set(pos_r)}\tMiniPCR_Pair_Primer:{(best_forward_primer,best_reverse_primer)}\t{miniPCR1}\t{miniPCR2}")
 # Define the argparse parameters
 parser = argparse.ArgumentParser("MAF InDel Marker Analysis For PSVGT InDel VCF", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("vcf_file", help="the vcf file from PSVGT")
@@ -157,7 +157,7 @@ def is_valid_dna_sequence(sequence):
     bool: True if the sequence is valid, False otherwise.
     """
     # Define valid nucleotides
-    valid_nucleotides = {'A', 'G', 'C', 'T', 'N'}
+    valid_nucleotides = {'A','a', 'G','g', 'C','c', 'T','t', 'N'}
     # Use set comparison to check for any invalid characters
     return all(char in valid_nucleotides for char in sequence)
 
