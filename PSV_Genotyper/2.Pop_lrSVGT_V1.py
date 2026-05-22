@@ -16,7 +16,7 @@ def makedir(path):
 def run_command(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
-def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=200,minfilt=35):
+def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, ins_homo_rate, shift=200,minfilt=35):
     sampleID = name
     info = sv_line.strip().split("\t")
     if "DEL" in info[5]:
@@ -24,7 +24,8 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
         sv_size = int(info[3])
         left_most = max(sv_s - shift, 0)
         left_sam = opened_sam.fetch(reference=chrome, start=left_most, end=sv_s + shift)
-        right_sam = opened_sam.fetch(reference=chrome, start=sv_e - shift, end=sv_e + shift)
+        left_most = max(sv_e - shift, 0)
+        right_sam = opened_sam.fetch(reference=chrome, start=left_most, end=sv_e + shift)
         genotype = delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift,minfilt)
         out = [chrome, sv_s, sv_e, sv_size, -sv_size]
         return "\t".join(map(str, out + genotype))
@@ -36,7 +37,7 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
         sv_size = int(info[3])
         left_most = max(sv_s - shift, 0)
         region_sam = opened_sam.fetch(reference=chrome, start=left_most, end=sv_e + shift)
-        genotype = insGT(sampleID, region_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift, minfilt)
+        genotype = insGT(sampleID, region_sam, chrome, sv_s, sv_e, sv_size, min_maq, ins_homo_rate, ref_rate, shift, minfilt)
         out = [chrome, sv_s, sv_e, -sv_size, sv_size]
         return "\t".join(map(str, out + genotype))
 
@@ -62,12 +63,22 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
         if sv_size < 1000:
             shift = ceil(sv_size / 2)
         else:
-            shift = 500
+            shift = 1000
         left_most = max(bp1 - shift, 0)
         bp1_sam = opened_sam.fetch(reference=chrome, start=left_most, end=bp1 + shift)
         bp2_sam = opened_sam.fetch(reference=chrome, start=bp2 - shift, end=bp2 + shift)
         out = [chrome, bp1, bp2, sv_size, sv_size]
-        genotype = breaks2invGT(sampleID, bp1_sam, bp2_sam, chrome, chrome, bp1, bp2, sv_size, min_maq, "INV", shift=shift)
+        #genotype = breaks2invGT(sampleID, bp1_sam, bp2_sam, chrome, chrome, bp1, bp2, sv_size, min_maq, "INV", shift=shift)
+        genotype = invGT(sampleID, bp1_sam, bp2_sam, chrome, chrome, bp1, bp2, sv_size, min_maq, "INV", shift=shift)
+        if genotype[0] == "0/1":
+            if sv_size < 1000:
+                shift = ceil(sv_size / 2)
+            else:
+                shift = 500
+            left_most = max(bp1 - shift, 0)
+            bp1_sam = opened_sam.fetch(reference=chrome, start=left_most, end=bp1 + shift)
+            bp2_sam = opened_sam.fetch(reference=chrome, start=bp2 - shift, end=bp2 + shift)
+            genotype = breaks2invGT(sampleID, bp1_sam, bp2_sam, chrome, chrome, bp1, bp2, sv_size, min_maq, "INV", shift=shift)
         return "\t".join(map(str, out + genotype))
 
     if "TRA" in info[5]:
@@ -92,18 +103,18 @@ def process_sv(sv_line, opened_sam, name, min_maq, homo_rate, ref_rate, shift=20
 
 
 def process_chromosome(args):
-    chromosome_lines, mapf, name, min_maq, homo_rate, ref_rate, shift,minsv = args
+    chromosome_lines, mapf, name, min_maq, homo_rate, ref_rate, ins_homo_rate, shift,minsv = args
     opened_sam = pysam.AlignmentFile(mapf, "rb")
     chromosome_output = []
     for line in chromosome_lines:
-        result = process_sv(line, opened_sam, name, min_maq, homo_rate, ref_rate, shift, minsv)
+        result = process_sv(line, opened_sam, name, min_maq, homo_rate, ref_rate, ins_homo_rate ,shift, minsv)
         if result:
             chromosome_output.append(result)
     opened_sam.close()
     return chromosome_output
 
 
-def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, homo_rate, ref_rate, shift, workers,minsv):
+def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, homo_rate, ref_rate, ins_homo_rate, shift, workers,minsv):
     header_line = f"#Target_name\tTarget_start\tTarget_end\tTarget_size\tQuery_size\t{name}\tTotal_Map_Reads\tSV_support"
     with open(supp_sv_table, "r") as svf:
         sv_lines = svf.readlines()
@@ -118,7 +129,7 @@ def svGenotyper(supp_sv_table, mapf, name, outdir, min_maq, homo_rate, ref_rate,
 
     output_lines = []
     with Pool(processes=workers) as pool:
-        args_list = [(lines, mapf, name, min_maq, homo_rate, ref_rate, shift,minsv) for _, lines in chromosome_groups.items()]
+        args_list = [(lines, mapf, name, min_maq, homo_rate, ref_rate, ins_homo_rate, shift,minsv) for _, lines in chromosome_groups.items()]
         results = list(tqdm(pool.imap(process_chromosome, args_list), total=len(args_list)))
         for result in results:
             output_lines.extend(result)
@@ -145,8 +156,9 @@ if __name__ == "__main__":
     IN.add_argument("-o", dest="dir", required=True, help="the output dir")
     IN.add_argument("-w", dest="workers", help="Number of worker processes", default=5, type=int)
     IN.add_argument("-minsv",dest="minsv",help="the minimum size of sv filter in GT", default=35,type=int)
+    IN.add_argument("-ins_homo_rate",dest="ins_homo_rate",help="to determine INS homozygous site, if 75 percentage of the local mapping signal suport the sv, the genotyoe will be 1/1", default=0.75,type=float)
     args = parser.parse_args()
     start_t = time()
-    svGenotyper(args.sv_info, args.mapf, args.ACC, args.dir, args.maq, args.lr_homo_rate, args.lr_ref_rate, args.shift, args.workers, args.minsv)
+    svGenotyper(args.sv_info, args.mapf, args.ACC, args.dir, args.maq, args.lr_homo_rate, args.lr_ref_rate, args.ins_homo_rate, args.shift, args.workers, args.minsv)
     end_t = time()
     print(f"******************* Cost time {end_t - start_t}s *********************")

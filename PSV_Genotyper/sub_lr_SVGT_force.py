@@ -275,6 +275,8 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, 
                 genotype = "0/1"
                 #print(f"***************Correting SVINS {chrome}:{sv_s}-{sv_e} genotype to 0/1 since it has {effective_span} span reads*****************")
         #print(f"INS\t{genotype}\t{sampleID}\ttotal_mapped_reads:{total_map_reads}\tIns_ratio:{ins_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
+        if genotype != "0/0" and sv_size < 800 and len(inserts) ==0:
+            genotype = "0/0"
         info_return.append(genotype)
         info_return.append(f"total_map_reads={total_map_reads},maq={maq}")
         info_return.append(f"INS_rate={ins_ratio};INS")
@@ -330,6 +332,8 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, h
     max_breaks = max(count_break_and_deles_l,count_break_and_deles_r)
     genotype = determine_genotype(max_breaks,breaks_dict[max_breaks], homo_rate, ref_rate)
     #print(f"DEL\t{genotype}\t{sampleID}\ttotal_mapped_reads_l={total_map_reads_l};total_mapped_reads_r={total_map_reads_r}\tdeles_l_ratio:{deles_l_ratio}\tdeles_r_ratio:{deles_r_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
+    if genotype !="0/0" and sv_size <1000 and (len(deles_l)+len(deles_r)) ==0:
+        genotype = "0/0" ## no CIGAR support SV ##
     info_return.append(genotype)
     info_return.append(f"total_map_reads_l={total_map_reads_l};total_map_reads_r={total_map_reads_r};maq={max(maq_l,maq_r)}")
     info_return.append(f"deles_l_ratio={deles_l_ratio},deles_r_ratio={deles_r_ratio};DEL")

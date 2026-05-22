@@ -104,8 +104,7 @@ parser.add_argument("ref")
 parser.add_argument("--min", default=50, type=int)
 parser.add_argument("--max", default=600, type=int)
 parser.add_argument("--frank", default=300, type=int)
-parser.add_argument("--maf", default=0.01, type=float)
-
+parser.add_argument("--maf", default=0, type=float)
 args = parser.parse_args()
 
 global_args = {

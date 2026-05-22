@@ -2,13 +2,13 @@ import pysam
 import re
 def process_chromosome(chromosome,chrom_size,chromosome_list, bamfile_path, minLen, maxLen, min_maq, SVsignal_out_path,dtype,msv):
     samfile = pysam.AlignmentFile(bamfile_path, 'rb')
-    with open(f"{SVsignal_out_path}_{chromosome}.record.txt", 'w') as indel_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.cov", 'w') as cov_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.suppAlign", 'w') as supp_sv_out, open(f'{SVsignal_out_path}_{chromosome}.record.txt.depth','w') as depth_out:
+    with open(f"{SVsignal_out_path}_{chromosome}.record.txt", 'w') as indel_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.cov", 'w') as cov_out, open(f"{SVsignal_out_path}_{chromosome}.record.txt.suppAlign", 'w') as supp_sv_out, open(f'{SVsignal_out_path}_{chromosome}.record.txt.depth','w') as depth_out, open(f'{SVsignal_out_path}_{chromosome}.record.txt.breakpoint', 'w') as break_out:
         # Fetch all reads from the chromosome
         lines = samfile.fetch(chromosome)
         total_map_lens = 0
         for line in lines:
             if dtype in ['sr', 'cr']:
-                result = svInDel4asm(line, minLen, min_maq,msv, maxLen, chromosome_list)
+                result = svInDel4asm(line, minLen, min_maq,msv, maxLen, chromosome_list, chrom_size)
                 if result is None:
                     continue
                 results, cov_line, supp_svsignal = result
@@ -19,9 +19,8 @@ def process_chromosome(chromosome,chrom_size,chromosome_list, bamfile_path, minL
                         supp_sv_out.writelines(f"{sv}\n")   
                 cov_out.writelines([cov_line])
             elif dtype in ['pb', 'ont', 'hifi']:
-                svInDels, cov_line, supp_svsignal = svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list)
+                svInDels, cov_line, supp_svsignal,breakpoints = svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list)
                 if cov_line:
-                    #print(cov_line)
                     total_map_lens += int(cov_line.split("\t")[4]) - int(cov_line.split("\t")[3])
                 if svInDels:
                     indel_out.writelines(svInDels)
@@ -30,12 +29,15 @@ def process_chromosome(chromosome,chrom_size,chromosome_list, bamfile_path, minL
                         supp_sv_out.writelines(f"{sv}\n")
                 if cov_line:
                     cov_out.writelines(cov_line)
+                if breakpoints:
+                    break_out.writelines(breakpoints)
         depth = round( total_map_lens / chrom_size, 2 )
         depth_out.write(f'{chromosome}\t{chrom_size}\t{total_map_lens}\t{depth}\n')
         depth_out.close()
         indel_out.close()
         cov_out.close()
         supp_sv_out.close()
+        break_out.close()
 
         if dtype == 'cr' and msv == 'yes':
             with open(f"{SVsignal_out_path}_{chromosome}.record.txt.suppAlign", 'a') as out:
@@ -45,7 +47,7 @@ def process_chromosome(chromosome,chrom_size,chromosome_list, bamfile_path, minL
                     out.writelines(f"{sv}\n")
             out.close()
 
-def segmentsv4asm(supp_list, min_size, max_size, chromosome_list):
+def segmentsv4asm(supp_list, min_size, max_size, chromosome_list, chrom_size):
     """
     Collecting the supplementary alignment to identify the INS, DEL, DUP, INV, TRA signals
     LongRead align to reference that has "SA" will be recorded as dict as follow:
@@ -156,7 +158,7 @@ def segmentsv4asm(supp_list, min_size, max_size, chromosome_list):
                 lap1 = sh3 + len2 - sh2
                 if -200 < lap1 < 500 and (rightmap[4] - leftmap[4]) > max(100, lap1):
                     inv_size = rightmap[4] - leftmap[4] - lap1
-                    if min_size <= inv_size <= max_size:
+                    if min_size <= inv_size <= max_size and inv_size < chrom_size/4:
                         sv_start,sv_end = leftmap[4],leftmap[4] + inv_size
                         svid = f'{pri_chrom}:{sv_start}-{sv_end}_INVLEN={inv_size}'
                         add_svcall(pri_chrom, readname, sv_start,
@@ -165,7 +167,7 @@ def segmentsv4asm(supp_list, min_size, max_size, chromosome_list):
                 lap2 = sh4 + len2 - sh1
                 if -200 < lap2 < 500 and  (rightmap[3]-leftmap[3])>=max(100,lap2):
                     inv_size = rightmap[3] - leftmap[3] - lap2
-                    if min_size <= inv_size <= max_size:
+                    if min_size <= inv_size <= max_size and inv_size < chrom_size/4:
                         sv_start,sv_end = leftmap[3],leftmap[3] + inv_size
                         svid = f'{pri_chrom}:{sv_start}-{sv_end}_INVLEN={inv_size}'
                         add_svcall(pri_chrom, readname, sv_start,
@@ -359,6 +361,7 @@ def segmentsv4lr(supp_list,min_size, max_size, chromosome_list, minimaq):
 def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
     supp_dict = {}
     svInDels = []
+    breaks = []
     supp_svsignal = []
     covinfo = ''
     readname = line.query_name
@@ -381,7 +384,7 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
             else:
                 supp_dict[readname]  = [supp]
 
-    if line.flag  in [0,16] and line.mapping_quality >= min_maq:
+    if line.flag  in [0,16,2048,2064] and line.mapping_quality >= min_maq:
         query_chr = line.query_name
         query_seq = line.query_sequence
         target_chr = line.reference_name
@@ -413,11 +416,14 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
                     #    print("!!!!!!!!! ins_seq extract error !!!!!!!!!")
                     svInDels.append(f"{target_chr}\t{query_chr}\t{ref}\t{ref + 1}\t{length}\t{maq}\t{target_chr}:{ref}-{ref+1}_INS={length}\tINS\t{ins_seq}\n")
                 query += length
-            #elif code in {"N", "S", "H"}:
+            elif code in {"S", "H"}:
+                if length >=500:
+                    breakinfo= f'{query_chr}\t{flag}\t{target_chr}\t{ref}\n'
+                    breaks.append(breakinfo)
             #    ref += length if code == "N" else 0
             #    query += length
         covinfo = f'{query_chr}\t{flag}\t{target_chr}\t{target_start}\t{target_end}\t{maq}\t{cigar}\n'
-        if msv == "yes":
+        if msv == "yes" and flag in [0,16] :
             if line.has_tag("SA"):
                 primary = [readname, line.flag, line.reference_name,target_start,refend,clipinfo, maq, line.query_sequence ]
                 if readname in supp_dict.keys():
@@ -443,10 +449,10 @@ def svInDel4lr(line, minLen, min_maq, maxLen, msv, chromosome_list):
         if supp_dict:
             if 2<= len(supp_dict[readname])<=20:
                 supp_svsignal = segmentsv4lr(supp_dict[readname],minLen, maxLen, chromosome_list,min_maq)
-    return svInDels, covinfo , supp_svsignal
+    return svInDels, covinfo , supp_svsignal,breaks
 
 
-def svInDel4asm(line, minLen, min_maq, msv, maxLen, chromosome_list):
+def svInDel4asm(line, minLen, min_maq, msv, maxLen, chromosome_list,chrom_size):
     if line.flag == 4 or line.mapping_quality < min_maq:
         return None  
     else:
@@ -516,7 +522,7 @@ def svInDel4asm(line, minLen, min_maq, msv, maxLen, chromosome_list):
                     supp_dict[readname] += [suppinfo]
             if supp_dict:
                 if 2<= len(supp_dict[readname]):
-                    supp_svsignal = segmentsv4asm(supp_dict[readname],minLen, maxLen, chromosome_list)
+                    supp_svsignal = segmentsv4asm(supp_dict[readname],minLen, maxLen, chromosome_list, chrom_size)
             return results,  f'{query_chr}\t{flag}\t{target_chr}\t{target_start}\t{target_end}\t{maq}\t{cigar}\n', supp_svsignal
 
 

@@ -7,6 +7,8 @@ import numpy as np
 import os
 from math import ceil,floor
 
+
+
 def local_cov(covinfo, reference, start, end):
     """
     For Contig samples may be cov file of txt will be better speed up,
@@ -63,9 +65,8 @@ def mode_or_median(series, lower_percentile=0.25, upper_percentile=0.75):
             # no mode, return mean
             return ceil(series.mean())
 
-def candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate=0.1,add=1):
+def candidate_sv(clusdf, num_hap, opened_bam, nreads, breaks, support_rate=0.1,add=1):
     """
-    Solve clusters dataframe
     Get each cluster's sv breakpoints, SV length
     For low depth clus, the cluster must be vary strict and intense, else it will generate a lot of false positive sv. 
     """
@@ -100,13 +101,15 @@ def candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate=0.1,add=1):
         print(svid)
         sv_eye = len(readsname)
         
-        if sv_eye < 2:
-            continue
+        #if sv_eye < 2:complex or nested SV may have only one signal
+        #    continue
         if svtype in ["INS", "DUP"]:
-            break_cov = local_cov(opened_bam, sv_chrom, sv_start-70, sv_start-50) + 1
+            local_depth = local_cov(opened_bam, sv_chrom, sv_start-70, sv_start-50)
+            break_cov = local_depth + 1
         elif svtype in ["DEL", "INV"]:
             midpoint = int(sv_start + sv_len*0.5)
-            break_cov = local_cov(opened_bam, sv_chrom, midpoint, midpoint+20) + 1
+            local_depth = local_cov(opened_bam, sv_chrom, midpoint, midpoint+20)
+            break_cov = local_depth + 1
         else:
             print("!!!!!!!!!!!!!!!!!!!!! SV type error !!!!!!!!!!!!!!!!!!!!!!!!")
 
@@ -115,6 +118,13 @@ def candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate=0.1,add=1):
             print(f"{svid} sv signal propertion support")
             clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
             msv.append(svid)
+
+        if local_depth == 0 and svtype == "DEL":
+            print(f"{svid} support DEL by local depth=0")
+            clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
+            msv.append(svid)
+
+
         if sv_len > 3000 and svtype=="INS" and sv_eye >= 2 and sv_eye >= break_cov*support_rate*0.6: ## to capture big INS
             if [sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname] not in clus:
                 print(f"{sv_eye} reads support {svid} big INS,breakpoint coverage is {break_cov} ")
@@ -130,15 +140,29 @@ def candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate=0.1,add=1):
                 print(f"{sv_eye} reads support {svid} INV,breakpoint coverage is {break_cov} ")
                 clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
                 msv.append(svid)
-
-
         
+
         if sv_eye >= nreads -1: ## filter 
             if [sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname] not in clus:
                 print(f"{sv_eye} reads support {svid},but local coverage is {break_cov}, breakdepth not support this sv")
+    
+
+        ## breakpoint capture SV ##
+        if len(breaks)>0:
+            if [sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname] not in clus:
+                print("Calling breakpoint to capture SV")
+                break1 = break_counter(breaks, sv_start, window=100)
+                break2 = break_counter(breaks, sv_end, window=100)
+                breaks_mean = (break1 + break2) / 2
+                if breaks_mean  >= 2 or (breaks_mean+sv_eye) >= nreads:
+                    clus.append([sv_chrom, sv_start, sv_end, sv_len, svid, svtype, "*", sv_eye, SV_rate, maq, readsname])
+                    print(f"{svid} capture by breakpoints({ceil(breaks_mean)}) and signas({sv_eye}), local coverage is {break_cov}")
+
+    ## multiple same type SV alleles
     if len(set(msv)) >= 2:
         outmsv = "\t".join(list(set(msv)))
         print(f'msv:\t{outmsv}')
+
     return clus
 
 def klook_clusters(clusdf, max_diff_func, len_fold=0.8):
@@ -282,7 +306,7 @@ def onedepth_all_clus(all_signal,svtype, opened_bam, msvfold, nrate=0.25):
         print(f'msv:\t{outmsv}')
     return clus
 
-def lowdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, msvfold, support_rate=0.1, add=1):
+def lowdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, msvfold, breaks, support_rate=0.1, add=1):
     """
     Process low-depth cluster data.
     Strict condition for clustering.
@@ -297,10 +321,10 @@ def lowdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, msvfold, support_r
     clusdf = klook_clusters(clusdf, max_diff_func, msvfold)
     print(clusdf[['#Target_name','Target_start','Target_end','SVlen','shift_cluster']])
 
-    candisv = candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate, add)
+    candisv = candidate_sv(clusdf, num_hap, opened_bam, nreads, breaks, support_rate, add)
     return candisv
 
-def highdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, msvfold, support_rate=0.1, add=2):
+def highdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, msvfold, breaks, support_rate=0.1, add=2):
     """
     Process high-depth cluster data.
     """
@@ -313,7 +337,7 @@ def highdepth_clu(clusdf, num_hap, svtype, opened_bam, nreads, msvfold, support_
     
     clusdf = klook_clusters(clusdf, max_diff_func, msvfold)
     print(clusdf[['#Target_name','Target_start','Target_end','SVlen','shift_cluster']])
-    candisv = candidate_sv(clusdf, num_hap, opened_bam, nreads, support_rate, add)
+    candisv = candidate_sv(clusdf, num_hap, opened_bam, nreads, breaks, support_rate, add)
     return candisv
 
 def filter_overlaps(df):
@@ -490,10 +514,10 @@ def windows_slide(dfs, depth, svtype, nreads=2,window_size=500):
             window_df.index = range(len(window_df))
             windows[current_start] = window_df
             print("!!!!!!!!!!!! big SV in window !!!!!!!!!!!!")
-        if nreads >= 5:
+        if nreads >= 6:
             nfil = 3
         else:
-            nfil = 2
+            nfil = 1
         if  nfil <= len(window_df['Query_name'].unique()) < depth * 10:
             window_df.index = range(len(window_df))
             windows[current_start] = window_df
@@ -658,11 +682,28 @@ def load_and_process_sv_data(args):
     else:
         print(f"Warning file {supp_align_file} not exist")
     print(f'******************** all chromosomes list {chroms} ****************************')
-    return sv_data, chroms, depth, nreads_fil
+    breakpoints_file = f'{args.raw_signal}.breakpoint'
+    if os.path.exists(breakpoints_file) and args.callbreak=="yes":
+        break_df = pd.read_csv(breakpoints_file, sep='\s+', header=None,names=['id', 'flag', 'chr', 'pos'])
+        break_df = break_df.sort_values(['chr', 'pos']).reset_index(drop=True)
+        breaks = break_df['pos'].values
+        print(f"Loading {len(breaks)} breakpoints info")
+        return sv_data, chroms, depth, nreads_fil, breaks
+    else:
+        return sv_data, chroms, depth, nreads_fil, []
 
-def process_svtype(args, sv_data, chroms, svtype, depth, nreads, minLen):
+
+def break_counter(breaks, query_pos, window=100):
+    if len(breaks) == 0:
+        return 0
+    left_idx = np.searchsorted(breaks, query_pos - window, side='left')
+    right_idx = np.searchsorted(breaks, query_pos + window, side='right')
+    return right_idx - left_idx
+
+
+def process_svtype(args, sv_data, chroms, svtype, depth, nreads, minLen, breaks):
     """
-        cov info parse by covfile or bam file
+    cov info parse by covfile or bam file
     """
     print(f"start klook for {args.raw_signal}  SV type: {svtype}") 
     if args.dtype in ['cr', 'sr']:
@@ -716,9 +757,9 @@ def process_svtype(args, sv_data, chroms, svtype, depth, nreads, minLen):
                                 hdepth = 10
                             for sv_window in sv_windows.values():
                                 if len(sv_window['Query_name']) > hdepth: 
-                                    candisv = highdepth_clu(sv_window,args.num_hap, svtype, opened_bam, nreads, args.msvfold, args.rate_depth, 1)
+                                    candisv = highdepth_clu(sv_window,args.num_hap, svtype, opened_bam, nreads, args.msvfold, breaks, args.rate_depth, 1)
                                 else:
-                                    candisv = lowdepth_clu(sv_window, args.num_hap, svtype, opened_bam, nreads, args.msvfold, args.rate_depth, 1)
+                                    candisv = lowdepth_clu(sv_window, args.num_hap, svtype, opened_bam, nreads, args.msvfold, breaks, args.rate_depth, 1)
                                 candidate_svs.extend(candisv)
                             return candidate_svs
 
@@ -792,12 +833,12 @@ def process_svtype(args, sv_data, chroms, svtype, depth, nreads, minLen):
         return [],[],[],[],[]
 
 def candidateSV(args):
-    sv_data, chroms, depth, nreads = load_and_process_sv_data(args)
+    sv_data, chroms, depth, nreads, breaks = load_and_process_sv_data(args)
     print(chroms, depth, nreads)
     if sv_data:
         sv_types = ["DEL", "INS", "INV", "DUP", "TRA"]
         with multiprocessing.Pool() as pool:
-            results = pool.starmap(process_svtype, [(args, sv_data, chroms, svtype, depth, nreads, args.min) for svtype in sv_types])
+            results = pool.starmap(process_svtype, [(args, sv_data, chroms, svtype, depth, nreads, args.min, breaks) for svtype in sv_types])
         tra_clus, del_clus, ins_clus, inv_clus, dup_clus = [], [], [], [], []
         for result in results:
             if result is not None:
@@ -829,7 +870,7 @@ if __name__ == "__main__":
     IN.add_argument("--window", dest="window_size", type=int, default=500, help="the window size of signal to parse in klook cluster, 500bp suggested")
     IN.add_argument("--num_hap", dest="num_hap", type=int, default=2, help="numbers of haplotypes within local region should be defined by species ploid, 2 for diploid, 4 for Tetraploid")
     IN.add_argument("--msvfold", dest="msvfold", type=float, default=0.8, help="the SV size fold change of multi sv alleles")
-
+    IN.add_argument("--callbreak", dest="callbreak", type=str, default='no', help="calling breakpoint as evidence of SV, seting to yes, breakpoint info will be used for calling those SV signal number less then csv")
     args = parser.parse_args()
     start_t = time()
     tra_clus, del_clus, ins_clus, inv_clus, dup_clus = candidateSV(args)

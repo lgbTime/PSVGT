@@ -1,4 +1,5 @@
 import re
+from math import ceil
 import subprocess
 from collections import defaultdict
 from math import ceil,floor
@@ -271,13 +272,14 @@ def determine_genotype(breaks, depth, homo_rate=0.75,ref_rate = 0.05):
         else:
             return "0/1"
 
+
 def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, ref_rate, shift, minfilt):
     info_return = []
     genotype = "0/0"  # Default genotype
-    shift = min(sv_size, 500)
-    sv_start_shift = set(range(sv_s - shift, sv_s + shift ))
-    sv_end_shift=set(range(sv_e-shift, sv_e+shift))
-    dup_shift = set(range(sv_s - sv_size, sv_s + sv_size)) ## samll dup capture as ins
+    
+    shift = min(sv_size, 300)
+    sv_start_shift = set(range(sv_s - shift - min(ceil(sv_size*0.05),250), sv_s + shift + min(ceil(sv_size*0.05),250)))
+    sv_end_shift   = set(range(sv_e - shift - min(ceil(sv_size*0.05),250), sv_e + shift + min(ceil(sv_size*0.05),250)))
     ############ SVIns Case #############
     breakpoints, inserts, total_map_reads, maq, effective_span = sam_primary_parser2Breaks_Ins(region_sam, min_maq, sv_size, sv_s, sv_e, minfilt)
     if total_map_reads == 0:
@@ -294,10 +296,12 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, 
         ins_ratio = round(count_break_and_Ins / total_map_reads, 3)
         genotype = determine_genotype(count_break_and_Ins, total_map_reads, homo_rate, ref_rate)
         if genotype == "1/1":
-            if floor(0.1*total_map_reads) + 1 <=  effective_span:
+            if floor(0.08*total_map_reads) + 1 <=  effective_span:
                 genotype = "0/1"
                 #print(f"***************Correting SVINS {chrome}:{sv_s}-{sv_e} genotype to 0/1 since it has {effective_span} span reads*****************")
         #print(f"INS\t{genotype}\t{sampleID}\ttotal_mapped_reads:{total_map_reads}\tIns_ratio:{ins_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
+        if genotype != "0/0" and sv_size < 800 and len(inserts)==0:
+            genotype = "0/0" ## no cigar support small SV
         info_return.append(genotype)
         info_return.append(f"total_map_reads={total_map_reads},maq={maq}")
         info_return.append(f"INS_rate={ins_ratio};INS")
@@ -308,8 +312,8 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, h
     info_return = []
     breaks_dict = {}
     genotype = "0/0"  # Default genotype
-    sv_start_shift = set(range(sv_s - shift, sv_s + shift))
-    sv_end_shift   = set(range(sv_e - shift, sv_e + shift))
+    sv_start_shift = set(range(sv_s - shift - min(ceil(sv_size*0.05),500), sv_s + shift + min(ceil(sv_size*0.05),500)))
+    sv_end_shift   = set(range(sv_e - shift - min(ceil(sv_size*0.05),500), sv_e + shift + min(ceil(sv_size*0.05),500)))
     breakpoints_l, deles_l, total_map_reads_l, maq_l = sam_primary_parser2Breaks_Del(left_sam,  min_maq, sv_size, sv_s, sv_e, minfilt)
     breakpoints_r, deles_r, total_map_reads_r, maq_r = sam_primary_parser2Breaks_Del(right_sam, min_maq, sv_size, sv_s, sv_e, minfilt)
     count_break_and_deles_l = 0
@@ -345,6 +349,10 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, h
     max_breaks = max(count_break_and_deles_l,count_break_and_deles_r)
     genotype = determine_genotype(max_breaks,breaks_dict[max_breaks], homo_rate, ref_rate)
     #print(f"DEL\t{genotype}\t{sampleID}\ttotal_mapped_reads_l={total_map_reads_l};total_mapped_reads_r={total_map_reads_r}\tdeles_l_ratio:{deles_l_ratio}\tdeles_r_ratio:{deles_r_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
+    if genotype != "0/0" and sv_size < 1000 and (len(deles_l) + len(deles_r))==0:
+        genotype = "0/0"  ## no signal support small SV
+    if min(count_break_and_deles_l,count_break_and_deles_r) < ref_rate:
+        genontype = "0/0"
     info_return.append(genotype)
     info_return.append(f"total_map_reads_l={total_map_reads_l};total_map_reads_r={total_map_reads_r};maq={max(maq_l,maq_r)}")
     info_return.append(f"deles_l_ratio={deles_l_ratio},deles_r_ratio={deles_r_ratio};DEL")
@@ -395,7 +403,7 @@ def breaks2invGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size
     breaks_dict[count_break_bp1] = total_map_reads_bp1 
     breaks_dict[count_break_bp2] = total_map_reads_bp2
     max_break_ratio = max(break1_ratio, break2_ratio)
-    if max_break_ratio >= 0.8:
+    if max_break_ratio >= 0.85:
         genotype = "1/1"
     elif break1_ratio+ break2_ratio< 0.1:
         genotype = "0/0"
@@ -633,7 +641,7 @@ def breaks2traGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size
     return info_return
 
 
-def supp2INVGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=800):
+def supp2INVGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=2000):
     bp1_map, bp2_map, genotype, maq1, maq2 = 0,0,0,0,0
     for line in bp1_sam:
         bp1_map += 1
@@ -686,20 +694,20 @@ def supp2INVGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, 
         maq_bp2 = 0
     return bp1_rate + bp2_rate, bp1_map, bp2_map, max(maq_bp1, maq_bp2)
 
-def invGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=800):
+def invGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=2000):
     """"
     if a sv size if supper big, than supp aligns could be the signal round the breakpoints
     readsID truely mapping at chr1_bp1 and chr2_bp2 then count it as support not because it have breakpoints,
     a repeat or complex region may easy to cause breakpoints, but that kind of reads region is not a tra signal
     used: hifi and cr, big INV
     """
-    rate, bp1_map, bp2_map, maq = supp2INVGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=800)
+    rate, bp1_map, bp2_map, maq = supp2INVGT(sampleID, bp1_sam, bp2_sam, chrome1, chrome2, bp1, bp2, sv_size, min_maq, sv_type, shift=2000)
     info_return = []
     if bp1_map + bp2_map == 0:
         genotype = "./."
-    if rate >=0.6:
+    if rate/4 >=0.75:
         genotype = '1/1'
-    elif rate < 0.05:
+    elif rate == 0:
         genotype = '0/0'
     else:
         genotype = '0/1'

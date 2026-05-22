@@ -246,6 +246,7 @@ def determine_traGT(break_l_ratio, break_r_ratio):
 
 
 def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, ref_rate, shift=100, span_bp=50):
+    print(f"shift {shift}bp for breakpoint counting")
     info_return = []
     genotype = "0/0"  # Default genotype
     #sv_start_shift = set(range(sv_s - shift, sv_s + shift+100))
@@ -294,6 +295,7 @@ def insGT(sampleID, region_sam, chrome, sv_s, sv_e,sv_size, min_maq, homo_rate, 
     return info_return
 def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, homo_rate, ref_rate, shift=100, span_bp=50):
     ############ SVDel Case ##############
+    print(f"shift {shift}bp for breakpoint counting")
     info_return = []
     genotype = "0/0"  # Default genotype
     sv_start_shift = set(range(sv_s - shift, sv_s + shift))
@@ -344,6 +346,7 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, h
         deles_r_ratio = 0
         covDel_r_ratio = 0
     deles_ratio = max(deles_l_ratio, deles_r_ratio)
+
     genotype = determine_genotype(deles_ratio, homo_rate, ref_rate)
     if genotype == "0/1":
         if effective_spans_l + effective_spans_r == 0:
@@ -354,6 +357,8 @@ def delGT(sampleID, left_sam, right_sam, chrome, sv_s, sv_e, sv_size, min_maq, h
     elif genotype == "0/0":
         if effective_spans_l + effective_spans_r == 0:
             genotype = '1/1'
+    elif min(deles_l_ratio, deles_r_ratio) < ref_rate:
+        genotype = "0/0"
     print(f"DEL\t{genotype}\t{sampleID}\ttotal_mapped_reads_l={total_map_reads_l};total_mapped_reads_r={total_map_reads_r}\tdeles_l_ratio:{deles_l_ratio}\tdeles_r_ratio:{deles_r_ratio}\tdele_l_covered_ratio:{covDel_l_ratio}\tdele_r_covered_ratio:{covDel_r_ratio}\t{chrome}\t{sv_s}\t{sv_e}")
     info_return.append(genotype)
     info_return.append(f"total_map_reads_l={total_map_reads_l},span_l={effective_spans_l};total_map_reads_r={total_map_reads_r},span_r={effective_spans_r}")

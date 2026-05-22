@@ -13,7 +13,7 @@ def main():
             with open(path, 'r'):
                 pass
         except FileNotFoundError:
-            raise SystemExit(f"错误：文件 {path} 不存在")
+            raise SystemExit(f"error：file {path} not found")
 
     hap1 = pd.read_csv(args.hap1path, sep='\t', header=0, index_col=None)
     hap2 = pd.read_csv(args.hap2path, sep='\t', header=0, index_col=None)
@@ -26,9 +26,9 @@ def main():
         "0/1": "0/1"
     }
 
-    hap1['GT'] = hap1[gt_h1].map(genotype_map).fillna(hap1[gt_h1])  # 未知基因型保留原值
+    hap1['GT'] = hap1[gt_h1].map(genotype_map).fillna(hap1[gt_h1])  
     hap2['GT'] = hap2[gt_h2].map(genotype_map).fillna(hap2[gt_h2])
-    # ---------------------- 合并相位基因型 ----------------------
+    
     phased = hap1.copy()
     phased['GT'] = hap1['GT'] + "|" + hap2['GT']
     phase_standard = {
