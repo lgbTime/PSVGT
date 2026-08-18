@@ -209,7 +209,7 @@ def determine_dupGT(break_l_ratio, break_r_ratio):
         genotype = "1/1"
     elif max(break_l_ratio, break_r_ratio ) >= 0.3 and min(break_l_ratio, break_r_ratio) >= 0.1:
         genotype = "1/1"
-    elif max(break_l_ratio, break_r_ratio) < 0.05:
+    elif max(break_l_ratio, break_r_ratio) <= 0.05:
         genotype = "0/0"
     else:
         genotype = "0/1"

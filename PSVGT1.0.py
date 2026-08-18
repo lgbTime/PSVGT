@@ -106,12 +106,23 @@ def pairend2contig(path, threads, ref):
         #bwa_bams.append(f'00_bwa_mem_out/{sample}_dedup.bam')
     return asm_cmds, map_sort_cmds, contigs, bwa_bams, megahit_sample_dir
 
+
 if __name__ == "__main__":
-    import pyfiglet
-    def print_large_SVInDel():
-        ascii_art = pyfiglet.figlet_format("PSVGT", font="slant")
-        print(ascii_art)
-    print_large_SVInDel()
+    BOLD = '\033[1m'
+    CYAN = '\033[36m'
+    DIM = '\033[2m'
+    RESET = '\033[0m'
+    BANNER = f'''
+{CYAN}{BOLD}██████╗  ███████╗ ██╗   ██╗  ██████╗  ████████╗
+██╔══██╗ ██╔════╝ ██║   ██║ ██╔════╝  ╚══██╔══╝
+██████╔╝ ███████╗ ██║   ██║ ██║  ███╗    ██║
+██╔═══╝  ╚════██║ ╚██╗ ██╔╝ ██║   ██║    ██║
+██║      ███████║  ╚████╔╝  ╚██████╔╝    ██║
+╚═╝      ╚══════╝   ╚═══╝    ╚═════╝     ╚═╝   {RESET}
+{DIM}──────────────────────────────────────────────────────────{RESET}
+{BOLD}  Population Structural Variants Discovering & Genotyping{RESET}
+'''
+    print(BANNER)
     import argparse
     from time import time
     parser = argparse.ArgumentParser(description="This is SVGT in population working flow", formatter_class= argparse.ArgumentDefaultsHelpFormatter)
@@ -559,8 +570,9 @@ if __name__ == "__main__":
     print(merge_cmd)
     run_command(merge_cmd)
     if args.popInDel == "yes":
-        run_command(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} --min 80 --max 600 --frank 400 --maf 0.01 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
-        print(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} 80 600 400 > {args.outdir}/PSVInDel_Primer4Pop.txt ")
+        run_command(f"python {PSVGT}/SVInDel_Primer/vcf2primer_v1.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} --min 50 --max 600 --frank 300 --maf 0 > {args.outdir}/PSVInDel_Primer4Pop_v1.txt & ")
+        run_command(f"python {PSVGT}/SVInDel_Primer/vcf2primer_v2.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome}  --min 50 --max 600 --min_product 100 --max_product 1000 --min_size_diff 30 --frank 300 --best_only >PSVInDel_Primer4Pop_v2.txt & ")
+        print(f"python {PSVGT}/SVInDel_Primer/vcf2primer.py {args.outdir}/PSVGT_all.vcf2.SVInDel {args.refGenome} 80 600 400 > {args.outdir}/PSVInDel_Primer4Pop_v1.txt ")
     ###################### Annotaion SVInDel For  Population #########################
     final_gt = f"{args.outdir}/PSVGT_all.vcf2.SVInDel"
     if args.gff:

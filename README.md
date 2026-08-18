@@ -32,7 +32,7 @@ Short-read samples are assembled into contigs before SV detection, while haploty
 
 ```bash
 git clone https://github.com/lgbTime/PSVGT.git
-pip install primer3-py pyfiglet pandas tqdm pysam intervaltree
+pip install primer3-py pandas tqdm pysam intervaltree
 ```
 
 ---
@@ -320,6 +320,23 @@ python SVInDel_Anno/SV_Features_Annotation.py \
     -c Parent \
     -o SVInDels_Lead_Gene_Variant.txt
 ```
+#### SV counts for group 
+```
+head lettuce_240_group.info
+W43	Virosa
+W18	Virosa
+W17	Virosa
+W16	Virosa
+S6	Stem
+S5	Stem
+S42	Stem
+S41	Stem
+S40	Stem
+
+python PSV_anno/PSV_Annotation.py -a Lsat_Salinas_v11.gtf -v all_variants.uniq.refined.merged.fil50bp_maf0.05.vcf -g lettuce_240_group.info -o group_SV_anno_percent
+
+```
+
 
 ---
 
