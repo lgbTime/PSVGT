@@ -70,11 +70,38 @@ Recommended long-read parameters:
 
 ##  ⏩ A quick start example of demo datasets
 ```
-python ~/bin/PSVGT1.0/PSVGT1.0.py -cr demo_yeast/cr_data/ -r demo_yeast/ref/CBS432.genome.fa -o out_demo -msv yes
+python ~/bin/PSVGT1.0/PSVGT1.0.py \
+	-cr demo_yeast/cr_data/ -r demo_yeast/ref/CBS432.genome.fa -o out_demo -msv yes
+```
+### Main output in out_demo
+#### Each chromosome SV signal
+```
+#Target_name	Target_start	Target_end	SVlen	SVID	SVType	seq	cluster_size	sv_rate	maq	readsID
+chrII	35755	35756	317	chrII:35755-35756_INS=317	INS	*	1	1.0	60	['chrII']
+chrII	55633	56050	265	chrII:55633-56050_INS=265	INS	*	1	1.0	60	['chrII']
+chrII	252576	252853	278	chrII:252576-252853_DEL=278	DEL	*	1	1.0	60	['chrII']
+chrII	427460	427577	118	chrII:427460-427577_DEL=118	DEL	*	1	1.0	60	['chrII']
+```
+#### Final Candaite SV
+```
+✗ head out_demo/0_tmp_N44.genome.fa_Clustered_Record.txt 
+#Target_name	Target_start	Target_end	SVlen	SVID	SVType	seq	maq	cluster_size	sv_rate
+chrI	14537	15492	600	chrI:14537-15492_DEL=600	DEL	*	60	1	1.0
+chrI	16303	16439	137	chrI:16303-16439_DEL=137	DEL	*	60	1	1.0
+chrI	17127	17396	270	chrI:17127-17396_DEL=270	DEL	*	60	1	1.0
+chrI	128943	129042	100	chrI:128943-129042_DEL=100	DEL	*	60	1	1.0
+```
+#### Final genotype table 
+```
+#Target_name	Target_start	Target_end	Target_size	Query_size	N44.genome.fa	Total_Map_Reads	SV_support
+chrI	128657	128658	-60	60	1/1	total_map_reads=1,maq=60	INS_rate=1.0;INS
+chrI	128943	129042	100	-100	1/1	total_map_reads_l=1;total_map_reads_r=1;maq=60	deles_l_ratio=1.0,deles_r_ratio=1.0;DEL
+chrI	14537	15492	600	-600	1/1	total_map_reads_l=1;total_map_reads_r=1;maq=60	deles_l_ratio=1.0,deles_r_ratio=1.0;DEL
+chrI	150301	150302	-376	376	1/1	total_map_reads=1,maq=60	INS_rate=1.0;INS
 ```
 ----
 
-## ⏩ One-Step PSVGT (Quick Start)
+## ⏩ One-Step PSVGT for multiple sequencing datasets
 
 This is the simplest way to run PSVGT on mixed sequencing data.
 
