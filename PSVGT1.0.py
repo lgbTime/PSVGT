@@ -147,7 +147,7 @@ if __name__ == "__main__":
     parser.add_argument("-M",  "--max", default=10000000, help= "The max length of  SV ")
     parser.add_argument("-e",  "--popcaps",default="no", help= "population caps analysis, the caps marker has a maf >= 0.05 will be output, input yes PopCaps will perform the analysis")
     parser.add_argument("-p",  "--popInDel",default="no", help= "using the primer3 to design the primer for each SVInDel")
-    parser.add_argument("-b",  "--breaker",default="no", help= "using the break points info to support the SVInDel Genotyping, this will perform bwa mapping process and breakpoints genotype")
+    parser.add_argument("-b",  "--breaker",default="no", help= "using the breakpoints info to support the SV Genotyping, this will perform bwa mapping processing and calling short reads genotyping module")
     parser.add_argument("-maq",  "--maq",default=30,type=int, help= "the mapping quality to caculate break points and mapping coverge range from 30-60")
     parser.add_argument("-csv",  "--csv",default=0.10, type=float, help= "the percent of reads that support a candidate SV (0.10 means at a depth 20X region, a SV signal should have at least 2 reads support, this parameter is for the variaty depth of hifi/ont/pb samples")
     parser.add_argument("-nreads",  "--nreads", type=int, help= "the number of reads to support a candidate SV (SV signal should have at least numbers reads support, this parameter is for the various depth of hifi/ont/pb samples")
