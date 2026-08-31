@@ -68,6 +68,12 @@ Recommended long-read parameters:
 
 ---
 
+##  ⏩ A quick start example of demo datasets
+```
+python ~/bin/PSVGT1.0/PSVGT1.0.py -cr demo_yeast/cr_data/ -r demo_yeast/ref/CBS432.genome.fa -o out_demo -msv yes
+```
+----
+
 ## ⏩ One-Step PSVGT (Quick Start)
 
 This is the simplest way to run PSVGT on mixed sequencing data.
